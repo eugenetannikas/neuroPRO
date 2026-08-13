@@ -1,0 +1,79 @@
+#list of analysis levels in the bids app
+analysis_levels: &analysis_levels
+ - participant
+ - group
+
+#mapping from analysis_level to set of target rules or files
+targets_by_analysis_level:
+  participant:
+    - 'all_participant'
+  group:
+    - 'all_group'
+
+# Inputs are discovered with custom planning-time logic in
+# workflow/rules/common.smk: the T1w runs use mixed naming (with/without
+# acq-) that pybids/snakebids cannot express as one path template, and the
+# NM-GRE images live in sourcedata/ with non-BIDS names.
+pybids_inputs: {}
+
+#configuration for the command-line parameters to make available
+# passed on the argparse add_argument()
+parse_args:
+  --nm_variant:
+    help: "Which distortion-correction variant of the NM-GRE magnitude series to
+      use. Siemens exports each acquisition twice: 'corrected' (SeriesDescription
+      'NM-GRE') and 'uncorrected' ('NM-GRE_ND', i.e. no distortion correction).
+      (default: %(default)s)"
+    default: corrected
+    choices:
+      - corrected
+      - uncorrected
+
+  --nm_echoes:
+    help: "Echo numbers to include in NM realignment and averaging
+      (default: %(default)s)"
+    type: int
+    nargs: '+'
+    default: [1, 2, 3]
+
+  --t1w_strategy:
+    help: "How to choose among multiple T1w runs of the preferred protocol.
+      MPRAGE is always preferred over FLASH, and distortion-corrected FLASH over
+      the _ND variant. 'last' picks the highest SeriesNumber (a re-scan is
+      usually acquired because earlier runs were corrupted by motion), 'first'
+      picks the lowest. (default: %(default)s)"
+    default: last
+    choices:
+      - last
+      - first
+
+  --t1w_choices:
+    help: "Optional TSV with columns 'subject' and 'filename' to manually
+      override the T1w run used for specific subjects (filename as it appears
+      in the subject's anat/ folder). (default: %(default)s)"
+    default: null
+
+  --fwhm:
+    help: "FWHM (mm) of the isotropic Gaussian smoothing kernel applied to the
+      normalized NM image (default: %(default)s)"
+    type: float
+    default: 1.0
+
+  --out_res:
+    help: "Isotropic voxel size (mm) of the normalized (template-space) outputs
+      (default: %(default)s)"
+    type: float
+    default: 1.0
+
+  --template_dir:
+    help: "Directory containing the template files (T1w, brain mask, tissue
+      probsegs). Defaults to the bundled tpl-MNI152NLin2009cAsym resources.
+      (default: %(default)s)"
+    default: null
+
+  --template_name:
+    help: "Name of the template (used in output space- entity and to build
+      bundled resource filenames) (default: %(default)s)"
+    default: MNI152NLin2009cAsym
+
+singularity: {}

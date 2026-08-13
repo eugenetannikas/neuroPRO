@@ -1,0 +1,96 @@
+import os
+
+from snakebids import bids
+
+
+configfile: "config/snakebids.yml"
+
+
+# use expandvars so we can use e.g. '$SLURM_TMPDIR'
+root = os.path.expandvars(config["root"])
+
+
+# T1w runs come in mixed naming (with and without acq-), which pybids/
+# snakebids cannot express as a single path template, and the NM-GRE images
+# live in sourcedata/ with non-BIDS names -- so both inputs are discovered
+# with planning-time globbing in rules/common.smk
+include: "rules/common.smk"
+
+
+wildcard_constraints:
+    subject="[a-zA-Z0-9]+",
+    tissue="[a-zA-Z]+",
+
+
+rule all_participant:
+    default_target: True
+    input:
+        # final deliverable: smoothed, normalized NM average
+        expand(
+            bids(
+                root=root,
+                datatype="anat",
+                space=template_name,
+                desc="smoothed",
+                suffix="NM.nii.gz",
+                subject="{subject}",
+            ),
+            subject=subjects,
+        ),
+        # NM average coregistered to the subject's T1w
+        expand(
+            bids(
+                root=root,
+                datatype="anat",
+                space="T1w",
+                desc="avg",
+                suffix="NM.nii.gz",
+                subject="{subject}",
+            ),
+            subject=subjects,
+        ),
+        # tissue segmentations
+        expand(
+            bids(
+                root=root,
+                datatype="anat",
+                label="{tissue}",
+                suffix="probseg.nii.gz",
+                subject="{subject}",
+            ),
+            subject=subjects,
+            tissue=["CSF", "GM", "WM"],
+        ),
+        expand(
+            bids(
+                root=root,
+                datatype="anat",
+                suffix="dseg.nii.gz",
+                subject="{subject}",
+            ),
+            subject=subjects,
+        ),
+        # QC snapshots
+        expand(
+            bids(
+                root=root,
+                datatype="qc",
+                desc="{qc}",
+                suffix="qc.png",
+                subject="{subject}",
+            ),
+            subject=subjects,
+            qc=["coreg", "seg", "norm"],
+        ),
+
+
+rule all_group:
+    input:
+        os.path.join(root, "group", "qc_summary.tsv"),
+        os.path.join(root, "group", "qc_index.html"),
+
+
+include: "rules/t1w.smk"
+include: "rules/nm.smk"
+include: "rules/normalize.smk"
+include: "rules/qc.smk"
