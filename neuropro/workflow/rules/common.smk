@@ -12,7 +12,7 @@ Common planning-time logic for neuroPRO.
 import sys
 from pathlib import Path
 
-from neuropro.discovery import scan_dataset, summarize
+from neuropro.discovery import scan_dataset, sidecar_for, summarize
 from neuropro.templates import find_template_file
 
 
@@ -144,8 +144,6 @@ def get_t1w_candidate_jsons(wildcards):
     A nonexistent input file would make Snakemake refuse to run the job, so
     absent sidecars are omitted; select_t1w treats their metadata as unknown.
     """
-    from neuropro.discovery import sidecar_for
-
     found = []
     for candidate in entry_for(wildcards).t1w:
         sidecar = sidecar_for(Path(candidate.path))
