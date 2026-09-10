@@ -20,6 +20,7 @@ from neuropro.discovery import (
     filter_nm,
     find_sessions,
     is_phase,
+    missing_participants,
     parse_bids_entities,
     scan_dataset,
     strip_nifti_ext,
@@ -486,3 +487,16 @@ def test_mixed_dataset_splits_into_full_and_nm_only(tmp_path):
     nm_only = [e for e in entries if e.nm and not e.t1w]
     assert [e.subject for e in full] == ["01", "03"]
     assert [e.subject for e in nm_only] == ["02"]
+
+
+def test_missing_participants_are_reported(tmp_path):
+    """A label matching nothing must be reported, not silently dropped."""
+    for subject in ("01", "02"):
+        nm = tmp_path / f"sub-{subject}" / "sourcedata" / f"sub-{subject}" / "nm-gre"
+        write_nii(nm / "NM-GRE_s1_e1.nii.gz", {"SeriesDescription": "NM-GRE"})
+
+    assert missing_participants(tmp_path, ["01", "99"]) == ["99"]
+    assert missing_participants(tmp_path, ["sub-99", "sub-02"]) == ["99"]
+    assert missing_participants(tmp_path, ["01", "02"]) == []
+    assert missing_participants(tmp_path, None) == []
+    assert missing_participants(tmp_path, []) == []

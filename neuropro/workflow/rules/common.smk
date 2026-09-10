@@ -12,7 +12,12 @@ Common planning-time logic for neuroPRO.
 import sys
 from pathlib import Path
 
-from neuropro.discovery import scan_dataset, sidecar_for, summarize
+from neuropro.discovery import (
+    missing_participants,
+    scan_dataset,
+    sidecar_for,
+    summarize,
+)
 from neuropro.templates import find_template_file
 
 
@@ -56,6 +61,18 @@ entries = scan_dataset(
     nm_echoes=config["nm_echoes"],
     include_combecho=config["include_combecho"],
 )
+
+_missing = missing_participants(
+    Path(config["bids_dir"]), config.get("participant_label")
+)
+if _missing:
+    print(
+        "WARNING: --participant-label asked for "
+        f"{', '.join('sub-' + s for s in _missing)}, which "
+        f"{'has' if len(_missing) == 1 else 'have'} no directory in "
+        f"{config['bids_dir']}.",
+        file=sys.stderr,
+    )
 
 print(summarize(entries), file=sys.stderr)
 

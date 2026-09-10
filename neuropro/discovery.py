@@ -483,6 +483,24 @@ def find_sessions(subject_dir: Path) -> list[str]:
     )
 
 
+def missing_participants(
+    bids_dir: Path, participant_label: list[str] | None
+) -> list[str]:
+    """Requested subject labels that have no directory in the dataset.
+
+    A label that matches nothing is silently dropped by the filter, which is
+    the wrong default when the list came from a spreadsheet or another
+    cohort: half of it can be missing without anything saying so.
+    """
+    if not participant_label:
+        return []
+    present = {
+        p.name.removeprefix("sub-") for p in Path(bids_dir).glob("sub-*") if p.is_dir()
+    }
+    requested = {s.removeprefix("sub-") for s in participant_label}
+    return sorted(requested - present)
+
+
 def scan_dataset(
     bids_dir: Path,
     participant_label: list[str] | None = None,
