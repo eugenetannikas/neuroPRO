@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from neuropro.discovery import scan_dataset, summarize
+from neuropro.templates import find_template_file
 
 
 def resources_path(path):
@@ -31,26 +32,8 @@ else:
 
 
 def template_file(suffix, **entities):
-    """Locate a template resource, tolerating entity spelling variations.
-
-    TemplateFlow names are not uniform across templates: the resolution entity
-    may be written 'res-01' or 'res-1', and cohort-specific (e.g. paediatric)
-    templates carry an extra 'cohort-' entity.  Rather than hard-coding one
-    spelling, glob on the entities that actually identify the file.  When
-    several resolutions are present the highest (numerically smallest 'res-')
-    is preferred, since everything is resampled to --out_res anyway.
-    """
-    parts = "".join(f"*{key}-{value}" for key, value in entities.items())
-    matches = sorted(template_dir.glob(f"tpl-{template_name}{parts}*_{suffix}.nii.gz"))
-    if not matches:
-        listing = "\n".join(f"    {p.name}" for p in sorted(template_dir.glob("*")))
-        raise FileNotFoundError(
-            f"No template file for '{suffix}' ({entities}) in {template_dir}\n"
-            f"  looked for: tpl-{template_name}{parts}*_{suffix}.nii.gz\n"
-            f"  directory contains:\n{listing or '    (empty)'}\n"
-            "Point --template_dir at a directory using TemplateFlow naming."
-        )
-    return str(matches[0])
+    """Locate a template resource (see neuropro/templates.py)."""
+    return find_template_file(template_dir, template_name, suffix, **entities)
 
 
 template_t1w = template_file("T1w", res="01")

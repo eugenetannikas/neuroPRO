@@ -62,14 +62,18 @@ parse_args:
 
   --t1w_strategy:
     help: "How to choose among multiple T1w runs of the preferred protocol.
-      MPRAGE is always preferred over FLASH, and distortion-corrected FLASH over
-      the _ND variant. 'last' picks the highest SeriesNumber (a re-scan is
-      usually acquired because earlier runs were corrupted by motion), 'first'
-      picks the lowest. (default: %(default)s)"
+      A recognised 3D T1 sequence (MPRAGE, MP2RAGE, BRAVO, FSPGR, TFE, ...) is
+      preferred over an unrecognised one, and both over a distortion-uncorrected
+      '_ND' export. 'last' picks the highest SeriesNumber (a re-scan is usually
+      acquired because earlier runs were corrupted by motion), 'first' the
+      lowest, 'sharpest' the run with the highest Laplacian-variance sharpness.
+      When SeriesNumber is unavailable, 'last'/'first' fall back to the run-
+      entity and then to sharpness. (default: %(default)s)"
     default: last
     choices:
       - last
       - first
+      - sharpest
 
   --t1w_choices:
     help: "Optional TSV with columns 'subject' and 'filename' to manually
