@@ -435,3 +435,20 @@ def test_every_layout_handles_missing_directory(tmp_path, layout):
     """Discovery on a nonexistent path returns empty, never raises."""
     images, _ = discover_nm(tmp_path / "does-not-exist", layout=layout)
     assert images == []
+
+
+def test_mixed_dataset_splits_into_full_and_nm_only(tmp_path):
+    """Subjects with and without a T1w are both kept, and distinguishable."""
+    for subject, with_t1w in (("01", True), ("02", False), ("03", True)):
+        base = tmp_path / f"sub-{subject}"
+        nm = base / "sourcedata" / f"sub-{subject}" / "nm-gre"
+        write_nii(nm / "NM-GRE_s1_e1.nii.gz", {"SeriesDescription": "NM-GRE"})
+        if with_t1w:
+            write_nii(base / "anat" / f"sub-{subject}_T1w.nii.gz",
+                      {"SeriesDescription": "MPRAGE", "SeriesNumber": 2})
+
+    entries = scan_dataset(tmp_path)
+    full = [e for e in entries if e.nm and e.t1w]
+    nm_only = [e for e in entries if e.nm and not e.t1w]
+    assert [e.subject for e in full] == ["01", "03"]
+    assert [e.subject for e in nm_only] == ["02"]

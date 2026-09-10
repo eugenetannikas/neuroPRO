@@ -76,7 +76,9 @@ entries = scan_dataset(
 
 print(summarize(entries), file=sys.stderr)
 
-usable = [e for e in entries if e.nm and e.t1w]
+processable = [e for e in entries if e.nm]
+full_entries = [e for e in processable if e.t1w]
+nmonly_entries = [e for e in processable if not e.t1w]
 
 _no_nm = [e.label for e in entries if not e.nm]
 if _no_nm:
@@ -87,18 +89,22 @@ if _no_nm:
         file=sys.stderr,
     )
 
-_no_t1w = [e.label for e in entries if e.nm and not e.t1w]
-if _no_t1w:
+if nmonly_entries:
     print(
-        f"WARNING: no T1w found for {', '.join(_no_t1w)}; skipping.",
+        f"NOTE: no T1w for {', '.join(e.label for e in nmonly_entries)}. "
+        "These are processed as far as the data allows -- realignment, "
+        "averaging and motion QC in native NM space -- but cannot be "
+        "coregistered, segmented or normalized to the template.",
         file=sys.stderr,
     )
 
-if not usable:
+if not processable:
     raise ValueError(
-        "No subjects with both NM-GRE and T1w images were found in "
+        "No subjects with NM-GRE images were found in "
         f"{config['bids_dir']}.\n"
-        "See the scan summary above for what was found per subject."
+        "See the scan summary above for what was found per subject.  If the "
+        "images are there but were not recognised, set --nm_layout or "
+        "--nm_pattern."
     )
 
 
@@ -109,9 +115,9 @@ if not usable:
 # genuinely ambiguous rather than merely awkward, so it is rejected with an
 # explanation instead of guessed at.
 
-_sessioned = [e for e in usable if e.session is not None]
-if _sessioned and len(_sessioned) != len(usable):
-    _flat = ", ".join(e.label for e in usable if e.session is None)
+_sessioned = [e for e in processable if e.session is not None]
+if _sessioned and len(_sessioned) != len(processable):
+    _flat = ", ".join(e.label for e in processable if e.session is None)
     raise ValueError(
         "This dataset mixes sessioned and unsessioned subjects, which cannot "
         "share one set of output paths.\n"
@@ -127,12 +133,16 @@ subj_wildcards = {"subject": "{subject}"}
 if use_sessions:
     subj_wildcards["session"] = "{session}"
 
-#: Parallel lists for zip-expanding a target over every subject/session pair.
-target_entities = {"subject": [e.subject for e in usable]}
-if use_sessions:
-    target_entities["session"] = [e.session for e in usable]
 
-inputs_by_key = {e.key: e for e in usable}
+def entities_of(entry_list):
+    """Parallel lists for zip-expanding a target over the given entries."""
+    values = {"subject": [e.subject for e in entry_list]}
+    if use_sessions:
+        values["session"] = [e.session for e in entry_list]
+    return values
+
+
+inputs_by_key = {e.key: e for e in processable}
 
 
 def entry_for(wildcards):

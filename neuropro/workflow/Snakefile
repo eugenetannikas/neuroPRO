@@ -23,14 +23,26 @@ wildcard_constraints:
     tissue="[a-zA-Z]+",
 
 
+def for_each(entry_list, **entities):
+    """Expand a bids() path over the given subject/session entries."""
+    if not entry_list:
+        return []
+    return expand(
+        bids(root=root, **entities, **subj_wildcards),
+        zip,
+        **entities_of(entry_list),
+    )
+
+
 def for_each_entry(**entities):
-    """Expand a bids() path over every subject (and session) to be processed."""
-    return expand(bids(root=root, **entities, **subj_wildcards), zip, **target_entities)
+    """Expand over every entry that has a T1w (the full pipeline)."""
+    return for_each(full_entries, **entities)
 
 
 rule all_participant:
     default_target: True
     input:
+        # ---- entries with a T1w: the full pipeline ----
         # final deliverable: smoothed, normalized NM average
         for_each_entry(
             datatype="anat",
@@ -51,6 +63,11 @@ rule all_participant:
             for_each_entry(datatype="qc", desc=qc, suffix="qc.png")
             for qc in ["coreg", "seg", "norm"]
         ],
+        # ---- entries without a T1w: as far as the data allows ----
+        # realigned + averaged NM in native space, with motion QC
+        for_each(nmonly_entries, datatype="anat", desc="avg", suffix="NM.nii.gz"),
+        for_each(nmonly_entries, datatype="qc", desc="motion", suffix="NM.tsv"),
+        for_each(nmonly_entries, datatype="qc", desc="nm", suffix="qc.png"),
 
 
 rule all_group:

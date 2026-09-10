@@ -5,6 +5,7 @@ Modes:
 - seg:   T1w as background with tissue-class boundary overlay
 - norm:  template with normalized-T1w edges; normalized NM with template
          edges; brainstem (SN/LC region) zoom on the normalized NM
+- nm:    native-space NM average alone, for entries with no T1w
 """
 
 import matplotlib
@@ -232,22 +233,57 @@ def snapshot_norm(template_path, t1w_tpl_path, nm_tpl_path, out_png, title):
     plt.close(fig)
 
 
+def snapshot_nm(nm_path, out_png, title):
+    """The NM average on its own, for entries with no T1w to overlay.
+
+    Three rows of slices through the acquired slab.  NM-GRE is a thin
+    brainstem slab, so the sagittal/coronal views are coarse -- they are there
+    to show gross realignment failure and slab coverage, not anatomy.
+    """
+    nm_img, nm = load(nm_path)
+    zooms = nm_img.header.get_zooms()[:3]
+    lo, hi = norm_range(nm)
+
+    n_cols = 5
+    fig, axes = plt.subplots(3, n_cols, figsize=(3 * n_cols, 9), facecolor="black")
+    for row, (axis, name) in enumerate([(2, "axial"), (1, "coronal"), (0, "sagittal")]):
+        for col, index in enumerate(bbox_indices(nm, axis, n_cols)):
+            ax = axes[row, col]
+            ax.imshow(
+                get_slice(nm, axis, index),
+                cmap="gray",
+                vmin=lo,
+                vmax=hi,
+                aspect=slice_aspect(zooms, axis),
+                interpolation="nearest",
+            )
+            ax.axis("off")
+            if col == 0:
+                ax.set_title(name, color="white", fontsize=9, loc="left")
+    fig.suptitle(title, color="white")
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=120, facecolor="black")
+    plt.close(fig)
+
+
 mode = snakemake.params.mode
-subject = snakemake.wildcards.subject
+label = f"sub-{snakemake.wildcards.subject}"
+if hasattr(snakemake.wildcards, "session"):
+    label += f"_ses-{snakemake.wildcards.session}"
 
 if mode == "coreg":
     snapshot_overlay(
         snakemake.input.bg,
         snakemake.input.overlay,
         snakemake.output.png,
-        f"sub-{subject}: NM average in T1w space (T1w edges)",
+        f"{label}: NM average in T1w space (T1w edges)",
     )
 elif mode == "seg":
     snapshot_seg(
         snakemake.input.bg,
         snakemake.input.overlay,
         snakemake.output.png,
-        f"sub-{subject}: tissue segmentation",
+        f"{label}: tissue segmentation",
     )
 elif mode == "norm":
     snapshot_norm(
@@ -255,7 +291,13 @@ elif mode == "norm":
         snakemake.input.t1w_tpl,
         snakemake.input.nm_tpl,
         snakemake.output.png,
-        f"sub-{subject}: normalization",
+        f"{label}: normalization",
+    )
+elif mode == "nm":
+    snapshot_nm(
+        snakemake.input.nm,
+        snakemake.output.png,
+        f"{label}: NM average (native space, no T1w available)",
     )
 else:
     raise ValueError(f"unknown qc mode: {mode}")
