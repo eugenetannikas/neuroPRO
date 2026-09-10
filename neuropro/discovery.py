@@ -204,9 +204,7 @@ class SubjectInputs:
 
     @property
     def label(self) -> str:
-        return f"sub-{self.subject}" + (
-            f"_ses-{self.session}" if self.session else ""
-        )
+        return f"sub-{self.subject}" + (f"_ses-{self.session}" if self.session else "")
 
 
 # --------------------------------------------------------------------------
@@ -481,9 +479,7 @@ def discover_t1w(search_root: Path) -> list[T1wImage]:
 def find_sessions(subject_dir: Path) -> list[str]:
     """Session labels under a subject directory, empty when unsessioned."""
     return sorted(
-        p.name.removeprefix("ses-")
-        for p in subject_dir.glob("ses-*")
-        if p.is_dir()
+        p.name.removeprefix("ses-") for p in subject_dir.glob("ses-*") if p.is_dir()
     )
 
 
@@ -521,10 +517,10 @@ def scan_dataset(
             # NM lives under sourcedata/ in the CFMM layout, which sits at the
             # subject level even when the anatomicals are sessioned, so NM is
             # searched from the subject root and filtered by session below
-            search_root = (
-                subject_dir / f"ses-{session}" if session else subject_dir
+            search_root = subject_dir / f"ses-{session}" if session else subject_dir
+            nm_root = (
+                search_root if session and _has_content(search_root) else subject_dir
             )
-            nm_root = search_root if session and _has_content(search_root) else subject_dir
             images, notes = discover_nm(
                 nm_root, nm_layout, nm_pattern, include_combecho
             )

@@ -57,9 +57,7 @@ def test_strip_nifti_ext(name, expected):
 
 
 def test_parse_bids_entities():
-    entities = parse_bids_entities(
-        "sub-01_ses-A_acq-NM_echo-2_part-mag_MEGRE.nii.gz"
-    )
+    entities = parse_bids_entities("sub-01_ses-A_acq-NM_echo-2_part-mag_MEGRE.nii.gz")
     assert entities["sub"] == "01"
     assert entities["ses"] == "A"
     assert entities["acq"] == "NM"
@@ -87,9 +85,13 @@ def cfmm_subject(tmp_path):
     """One CABIN-style subject: 2 series x 3 echoes, both variants, + phase."""
     nm_dir = tmp_path / "sub-01" / "sourcedata" / "sub-01" / "nm-gre"
     for echo in (1, 2, 3):
-        write_nii(nm_dir / f"NM-GRE_s6_e{echo}.nii.gz", {"SeriesDescription": "NM-GRE_ND"})
+        write_nii(
+            nm_dir / f"NM-GRE_s6_e{echo}.nii.gz", {"SeriesDescription": "NM-GRE_ND"}
+        )
         write_nii(nm_dir / f"NM-GRE_s7_e{echo}.nii.gz", {"SeriesDescription": "NM-GRE"})
-        write_nii(nm_dir / f"NM-GRE_s8_e{echo}_ph.nii.gz", {"SeriesDescription": "NM-GRE"})
+        write_nii(
+            nm_dir / f"NM-GRE_s8_e{echo}_ph.nii.gz", {"SeriesDescription": "NM-GRE"}
+        )
     write_nii(
         tmp_path / "sub-01" / "anat" / "sub-01_run-1_T1w.nii.gz",
         {"SeriesDescription": "T1 SAG MPRAGE grappa2", "SeriesNumber": 2},
@@ -107,7 +109,12 @@ def test_cfmm_finds_magnitude_only(cfmm_subject):
 def test_cfmm_orders_by_series_then_echo(cfmm_subject):
     images, _ = discover_nm(cfmm_subject / "sub-01")
     assert [(i.series, i.echo) for i in images] == [
-        (6, 1), (6, 2), (6, 3), (7, 1), (7, 2), (7, 3),
+        (6, 1),
+        (6, 2),
+        (6, 3),
+        (7, 1),
+        (7, 2),
+        (7, 3),
     ]
 
 
@@ -173,12 +180,18 @@ def dcm2niix_subject(tmp_path):
     d = tmp_path / "sub-S1" / "nifti"
     stamp = "20260903123857"
     for echo in (1, 2, 3):
-        write_nii(d / f"45_NM_MT-GRE_PAT4(2x2)_PSOFF_e{echo}_{stamp}.nii.gz",
-                  {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF"})
-        write_nii(d / f"44_NM_MT-GRE_PAT4(2x2)_PSOFF_e{echo}_{stamp}_ph.nii.gz",
-                  {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF"})
-    write_nii(d / f"46_NM_MT-GRE_PAT4(2x2)_PSOFF_CombEcho_e1_{stamp}.nii.gz",
-              {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF_CombEcho"})
+        write_nii(
+            d / f"45_NM_MT-GRE_PAT4(2x2)_PSOFF_e{echo}_{stamp}.nii.gz",
+            {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF"},
+        )
+        write_nii(
+            d / f"44_NM_MT-GRE_PAT4(2x2)_PSOFF_e{echo}_{stamp}_ph.nii.gz",
+            {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF"},
+        )
+    write_nii(
+        d / f"46_NM_MT-GRE_PAT4(2x2)_PSOFF_CombEcho_e1_{stamp}.nii.gz",
+        {"SeriesDescription": "NM_MT-GRE_PAT4(2x2)_PSOFF_CombEcho"},
+    )
     write_nii(d / f"1_localizer_e1_{stamp}.nii.gz", {"SeriesDescription": "localizer"})
     write_nii(d / f"2_t1_mprage_e1_{stamp}.nii.gz", {"SeriesDescription": "t1_mprage"})
     return tmp_path
@@ -221,13 +234,19 @@ def test_dcm2niix_combecho_opt_in(dcm2niix_subject):
 def bids_subject(tmp_path):
     anat = tmp_path / "sub-01" / "anat"
     for echo in (1, 2, 3):
-        write_nii(anat / f"sub-01_acq-NM_echo-{echo}_part-mag_MEGRE.nii.gz",
-                  {"SeriesDescription": "NM-GRE", "SeriesNumber": 7})
-        write_nii(anat / f"sub-01_acq-NM_echo-{echo}_part-phase_MEGRE.nii.gz",
-                  {"SeriesDescription": "NM-GRE", "SeriesNumber": 7})
+        write_nii(
+            anat / f"sub-01_acq-NM_echo-{echo}_part-mag_MEGRE.nii.gz",
+            {"SeriesDescription": "NM-GRE", "SeriesNumber": 7},
+        )
+        write_nii(
+            anat / f"sub-01_acq-NM_echo-{echo}_part-phase_MEGRE.nii.gz",
+            {"SeriesDescription": "NM-GRE", "SeriesNumber": 7},
+        )
     # an unrelated multi-echo GRE that must NOT be picked up
-    write_nii(anat / "sub-01_acq-QSM_echo-1_part-mag_MEGRE.nii.gz",
-              {"SeriesDescription": "QSM"})
+    write_nii(
+        anat / "sub-01_acq-QSM_echo-1_part-mag_MEGRE.nii.gz",
+        {"SeriesDescription": "QSM"},
+    )
     write_nii(anat / "sub-01_T1w.nii.gz", {"SeriesDescription": "MPRAGE"})
     return tmp_path
 
@@ -297,12 +316,15 @@ def test_unlabelled_echoes_ignore_echo_filter(tmp_path):
 def sessioned_dataset(tmp_path):
     for session in ("20250108", "20260430"):
         base = tmp_path / "sub-01" / f"ses-{session}"
-        write_nii(base / "anat" / f"sub-01_ses-{session}_T1w.nii.gz",
-                  {"SeriesDescription": "MPRAGE", "SeriesNumber": 2})
+        write_nii(
+            base / "anat" / f"sub-01_ses-{session}_T1w.nii.gz",
+            {"SeriesDescription": "MPRAGE", "SeriesNumber": 2},
+        )
         nm_dir = base / "sourcedata" / "sub-01" / "nm-gre"
         for echo in (1, 2, 3):
-            write_nii(nm_dir / f"NM-GRE_s5_e{echo}.nii.gz",
-                      {"SeriesDescription": "NM-GRE"})
+            write_nii(
+                nm_dir / f"NM-GRE_s5_e{echo}.nii.gz", {"SeriesDescription": "NM-GRE"}
+            )
     return tmp_path
 
 
@@ -368,17 +390,25 @@ def test_participant_label_filtering(tmp_path):
     for subject in ("01", "02", "03"):
         nm = tmp_path / f"sub-{subject}" / "sourcedata" / f"sub-{subject}" / "nm-gre"
         write_nii(nm / "NM-GRE_s1_e1.nii.gz", {"SeriesDescription": "NM-GRE"})
-    assert [e.subject for e in scan_dataset(tmp_path, participant_label=["02"])] == ["02"]
+    assert [e.subject for e in scan_dataset(tmp_path, participant_label=["02"])] == [
+        "02"
+    ]
     # a 'sub-' prefix on the label is tolerated
-    assert [e.subject for e in scan_dataset(tmp_path, participant_label=["sub-02"])] == ["02"]
-    assert [e.subject for e in scan_dataset(tmp_path, exclude_participant_label=["01"])] == ["02", "03"]
+    assert [
+        e.subject for e in scan_dataset(tmp_path, participant_label=["sub-02"])
+    ] == ["02"]
+    assert [
+        e.subject for e in scan_dataset(tmp_path, exclude_participant_label=["01"])
+    ] == ["02", "03"]
 
 
 def test_pattern_escape_hatch(tmp_path):
     d = tmp_path / "sub-01" / "weird"
     write_nii(d / "totally_custom_name_001.nii.gz", {"SeriesDescription": "whatever"})
     write_nii(d / "totally_custom_name_002.nii.gz", {"SeriesDescription": "whatever"})
-    images, _ = discover_nm(tmp_path / "sub-01", pattern="weird/totally_custom_*.nii.gz")
+    images, _ = discover_nm(
+        tmp_path / "sub-01", pattern="weird/totally_custom_*.nii.gz"
+    )
     assert len(images) == 2
     assert {i.layout for i in images} == {"pattern"}
 
@@ -389,8 +419,10 @@ def test_pattern_still_excludes_phase(tmp_path):
     write_nii(d / "custom_001.nii.gz", {"SeriesDescription": "NM"})
     write_nii(d / "custom_002_ph.nii.gz", {"SeriesDescription": "NM"})
     write_nii(d / "custom_003_part-phase.nii.gz", {"SeriesDescription": "NM"})
-    write_nii(d / "custom_004.nii.gz",
-              {"SeriesDescription": "NM", "ImageType": ["ORIGINAL", "PHASE"]})
+    write_nii(
+        d / "custom_004.nii.gz",
+        {"SeriesDescription": "NM", "ImageType": ["ORIGINAL", "PHASE"]},
+    )
     images, _ = discover_nm(tmp_path / "sub-01", pattern="weird/custom_*.nii.gz")
     assert [Path(i.path).name for i in images] == ["custom_001.nii.gz"]
 
@@ -444,8 +476,10 @@ def test_mixed_dataset_splits_into_full_and_nm_only(tmp_path):
         nm = base / "sourcedata" / f"sub-{subject}" / "nm-gre"
         write_nii(nm / "NM-GRE_s1_e1.nii.gz", {"SeriesDescription": "NM-GRE"})
         if with_t1w:
-            write_nii(base / "anat" / f"sub-{subject}_T1w.nii.gz",
-                      {"SeriesDescription": "MPRAGE", "SeriesNumber": 2})
+            write_nii(
+                base / "anat" / f"sub-{subject}_T1w.nii.gz",
+                {"SeriesDescription": "MPRAGE", "SeriesNumber": 2},
+            )
 
     entries = scan_dataset(tmp_path)
     full = [e for e in entries if e.nm and e.t1w]

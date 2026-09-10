@@ -16,9 +16,7 @@ import json
 import os
 import shutil
 
-os.environ.setdefault(
-    "ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS", str(snakemake.threads)
-)
+os.environ.setdefault("ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS", str(snakemake.threads))
 
 import ants
 import numpy as np

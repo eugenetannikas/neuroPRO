@@ -47,9 +47,9 @@ def test_nmi_detects_misalignment(volume):
     smooth = np.zeros((24, 24, 24))
     smooth[6:18, 6:18, 6:18] = 1.0
     shifted = np.roll(smooth, 8, axis=0)
-    assert normalized_mutual_information(smooth, smooth) > normalized_mutual_information(
-        smooth, shifted
-    )
+    assert normalized_mutual_information(
+        smooth, smooth
+    ) > normalized_mutual_information(smooth, shifted)
 
 
 def test_catastrophic_floor_sits_above_independence(volume):
@@ -97,8 +97,8 @@ def test_overlap_mask_selects_shared_foreground():
     rng = np.random.default_rng(3)
     a = rng.random((10, 10, 10)) * 0.1
     b = rng.random((10, 10, 10)) * 0.1
-    a[:6] += 10.0          # a's slab
-    b[4:] += 10.0          # b's slab, overlapping in the 4:6 band
+    a[:6] += 10.0  # a's slab
+    b[4:] += 10.0  # b's slab, overlapping in the 4:6 band
     mask = overlap_mask(a, b)
     assert mask[:4].sum() == 0
     assert mask[6:].sum() == 0

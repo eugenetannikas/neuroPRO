@@ -42,9 +42,7 @@ def test_tolerates_unpadded_resolution_entity(tmp_path):
 
 def test_tolerates_cohort_entity(tmp_path):
     """Paediatric templates carry an extra cohort- entity."""
-    d = make_template(
-        tmp_path, "tpl-MNIPediatricAsym_cohort-2_res-1_T1w.nii.gz"
-    )
+    d = make_template(tmp_path, "tpl-MNIPediatricAsym_cohort-2_res-1_T1w.nii.gz")
     assert find_template_file(d, "MNIPediatricAsym", "T1w", res="01").endswith(
         "cohort-2_res-1_T1w.nii.gz"
     )

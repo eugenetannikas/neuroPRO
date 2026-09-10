@@ -99,9 +99,7 @@ def overlap_mask(a, b, percentile: float = 60.0):
     return (a > 0) & (b > 0)
 
 
-def flag_low_outliers(
-    values, n_mad: float = 3.0, min_cohort: int = 5
-) -> list[bool]:
+def flag_low_outliers(values, n_mad: float = 3.0, min_cohort: int = 5) -> list[bool]:
     """Which values sit far below the cohort median.
 
     Uses the median and MAD rather than mean/SD so a couple of genuinely
@@ -112,9 +110,7 @@ def flag_low_outliers(
     ignore the column.
     """
     values = list(values)
-    usable = [
-        v for v in values if v is not None and np.isfinite(v)
-    ]
+    usable = [v for v in values if v is not None and np.isfinite(v)]
     if len(usable) < min_cohort:
         return [False] * len(values)
 
@@ -127,6 +123,4 @@ def flag_low_outliers(
     threshold = median - n_mad * 1.4826 * mad
     # bool() so callers get plain Python booleans rather than np.bool_ leaking
     # out of the isfinite check
-    return [
-        bool(v is not None and np.isfinite(v) and v < threshold) for v in values
-    ]
+    return [bool(v is not None and np.isfinite(v) and v < threshold) for v in values]
