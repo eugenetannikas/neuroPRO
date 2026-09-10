@@ -96,6 +96,12 @@ rule group_qc:
         nmonly_motion=for_each(
             nmonly_entries, datatype="qc", desc="motion", suffix="NM.tsv"
         ),
+        coreg_metrics=for_each(
+            full_entries, datatype="qc", desc="coreg", suffix="metrics.json"
+        ),
+        norm_metrics=for_each(
+            full_entries, datatype="qc", desc="norm", suffix="metrics.json"
+        ),
         pngs=(
             [
                 for_each(full_entries, datatype="qc", desc=qc, suffix="qc.png")

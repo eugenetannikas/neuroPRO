@@ -62,6 +62,13 @@ rule coregister_nm_to_t1w:
             suffix="xfm.mat",
             **subj_wildcards,
         ),
+        metrics=bids(
+            root=root,
+            datatype="qc",
+            desc="coreg",
+            suffix="metrics.json",
+            **subj_wildcards,
+        ),
     threads: 4
     script:
         "../scripts/coregister_nm_to_t1w.py"

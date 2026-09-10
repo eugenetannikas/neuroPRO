@@ -43,6 +43,13 @@ rule register_t1w_to_template:
             suffix="T1w.nii.gz",
             **subj_wildcards,
         ),
+        metrics=bids(
+            root=root,
+            datatype="qc",
+            desc="norm",
+            suffix="metrics.json",
+            **subj_wildcards,
+        ),
     threads: 8
     script:
         "../scripts/register_t1w_to_template.py"

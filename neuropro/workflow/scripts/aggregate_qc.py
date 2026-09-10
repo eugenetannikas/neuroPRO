@@ -12,6 +12,19 @@ import os
 
 import pandas as pd
 
+from neuropro.qc_metrics import flag_low_outliers
+
+
+def registration_metrics(path, prefix):
+    """Registration-quality numbers from one metrics sidecar."""
+    with open(path) as f:
+        data = json.load(f)
+    return {
+        f"{prefix}_nmi": data.get("NormalizedMutualInformation"),
+        f"{prefix}_correlation": data.get("Correlation"),
+        f"{prefix}_method": data.get("Method", ""),
+    }
+
 
 def motion_summary(motion_tsv):
     motion = pd.read_csv(motion_tsv, sep="\t")
@@ -31,10 +44,12 @@ def identity(entry):
 
 rows = []
 
-for entry, t1w_json, motion_tsv in zip(
+for entry, t1w_json, motion_tsv, coreg_json, norm_json in zip(
     snakemake.params.full,
     snakemake.input.t1w_jsons,
     snakemake.input.full_motion,
+    snakemake.input.coreg_metrics,
+    snakemake.input.norm_metrics,
 ):
     with open(t1w_json) as f:
         sel = json.load(f)
@@ -52,6 +67,8 @@ for entry, t1w_json, motion_tsv in zip(
         }
     )
     row.update(motion_summary(motion_tsv))
+    row.update(registration_metrics(coreg_json, "coreg"))
+    row.update(registration_metrics(norm_json, "norm"))
     rows.append(row)
 
 for entry, motion_tsv in zip(snakemake.params.nmonly, snakemake.input.nmonly_motion):
@@ -61,6 +78,24 @@ for entry, motion_tsv in zip(snakemake.params.nmonly, snakemake.input.nmonly_mot
     rows.append(row)
 
 df = pd.DataFrame(rows)
+
+# Flag registrations that sit far below the rest of the cohort.  Thresholds
+# are cohort-relative rather than absolute: what counts as a good NMI depends
+# on sequence, field strength and FOV, so a number tuned on one dataset would
+# mislabel every subject of the next one.
+flags = [[] for _ in range(len(df))]
+for column, label in [
+    ("coreg_nmi", "coreg"),
+    ("norm_nmi", "normalization"),
+]:
+    if column not in df.columns:
+        continue
+    for index, is_outlier in enumerate(flag_low_outliers(df[column].tolist())):
+        if is_outlier:
+            flags[index].append(f"low {label} NMI")
+if len(df):
+    df["qc_flags"] = ["; ".join(f) for f in flags]
+
 sort_cols = [c for c in ("subject", "session") if c in df.columns]
 if sort_cols:
     df = df.sort_values(sort_cols).reset_index(drop=True)
