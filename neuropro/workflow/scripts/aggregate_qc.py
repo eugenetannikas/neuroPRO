@@ -6,21 +6,23 @@ import os
 
 import pandas as pd
 
+entries = snakemake.params.entries
+
 rows = []
-for subject, t1w_json, motion_tsv in zip(
-    snakemake.params.subjects,
+for entry, t1w_json, motion_tsv in zip(
+    entries,
     snakemake.input.t1w_jsons,
     snakemake.input.motion_tsvs,
 ):
     with open(t1w_json) as f:
         sel = json.load(f)
-    chosen = next(
-        (c for c in sel.get("Candidates", []) if c.get("chosen")), {}
-    )
+    chosen = next((c for c in sel.get("Candidates", []) if c.get("chosen")), {})
     motion = pd.read_csv(motion_tsv, sep="\t")
-    rows.append(
+    row = {"subject": f"sub-{entry['subject']}"}
+    if entry.get("session"):
+        row["session"] = f"ses-{entry['session']}"
+    row.update(
         {
-            "subject": f"sub-{subject}",
             "t1w_chosen": os.path.basename(sel.get("SourceFile", "")),
             "t1w_protocol": chosen.get("series_description", ""),
             "t1w_series_number": chosen.get("series_number", ""),
@@ -32,18 +34,20 @@ for subject, t1w_json, motion_tsv in zip(
             "nm_max_rotation_deg": motion["rotation_deg"].max(),
         }
     )
+    rows.append(row)
 
 df = pd.DataFrame(rows)
 df.to_csv(snakemake.output.tsv, sep="\t", index=False)
 
-# simple html index with links to the per-subject snapshots
+# simple html index with links to the per-subject snapshots.  Snapshots are
+# grouped by the subject _and_ session entities of their filename, so the
+# sessions of one subject stay in separate sections.
 group_dir = os.path.dirname(snakemake.output.html)
-png_by_subject = {}
+png_by_entry = {}
 for png in snakemake.input.pngs:
-    sub = os.path.basename(png).split("_")[0]
-    png_by_subject.setdefault(sub, []).append(
-        os.path.relpath(png, group_dir)
-    )
+    parts = os.path.basename(png).split("_")
+    key = "_".join(p for p in parts if p.startswith(("sub-", "ses-")))
+    png_by_entry.setdefault(key, []).append(os.path.relpath(png, group_dir))
 
 parts = [
     "<html><head><title>neuroPRO QC</title>",
@@ -54,9 +58,9 @@ parts = [
     df.to_html(index=False, border=0),
     "<h1>Snapshots</h1>",
 ]
-for sub in sorted(png_by_subject):
-    parts.append(f"<h2>{html.escape(sub)}</h2>")
-    for rel in sorted(png_by_subject[sub]):
+for key in sorted(png_by_entry):
+    parts.append(f"<h2>{html.escape(key)}</h2>")
+    for rel in sorted(png_by_entry[key]):
         parts.append(
             f'<p><a href="{rel}">{html.escape(os.path.basename(rel))}</a>'
             f'<br><img src="{rel}" loading="lazy"></p>'

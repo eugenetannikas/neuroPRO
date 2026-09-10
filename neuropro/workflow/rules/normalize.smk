@@ -25,7 +25,7 @@ rule register_t1w_to_template:
             from_="T1w",
             to=template_name,
             suffix="xfm.h5",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         inv_xfm=bids(
             root=root,
@@ -33,7 +33,7 @@ rule register_t1w_to_template:
             from_=template_name,
             to="T1w",
             suffix="xfm.h5",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         t1w_tpl=bids(
             root=root,
@@ -41,7 +41,7 @@ rule register_t1w_to_template:
             space=template_name,
             desc="preproc",
             suffix="T1w.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 8
     script:
@@ -63,34 +63,34 @@ rule segment_t1w:
             datatype="anat",
             label="CSF",
             suffix="probseg.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         probseg_gm=bids(
             root=root,
             datatype="anat",
             label="GM",
             suffix="probseg.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         probseg_wm=bids(
             root=root,
             datatype="anat",
             label="WM",
             suffix="probseg.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         dseg=bids(
             root=root,
             datatype="anat",
             suffix="dseg.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         mask=bids(
             root=root,
             datatype="anat",
             desc="brain",
             suffix="mask.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 4
     script:
@@ -113,7 +113,7 @@ rule normalize_nm:
             space=template_name,
             desc="avg",
             suffix="NM.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 4
     script:
@@ -133,7 +133,7 @@ rule smooth_nm:
             space=template_name,
             desc="smoothed",
             suffix="NM.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         json=bids(
             root=root,
@@ -141,7 +141,7 @@ rule smooth_nm:
             space=template_name,
             desc="smoothed",
             suffix="NM.json",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     script:
         "../scripts/smooth_nm.py"

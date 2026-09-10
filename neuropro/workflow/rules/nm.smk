@@ -19,21 +19,21 @@ rule realign_average_nm:
             datatype="anat",
             desc="avg",
             suffix="NM.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         json=bids(
             root=root,
             datatype="anat",
             desc="avg",
             suffix="NM.json",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         motion=bids(
             root=root,
             datatype="qc",
             desc="motion",
             suffix="NM.tsv",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 4
     script:
@@ -52,7 +52,7 @@ rule coregister_nm_to_t1w:
             space="T1w",
             desc="avg",
             suffix="NM.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         xfm=bids(
             root=root,
@@ -60,7 +60,7 @@ rule coregister_nm_to_t1w:
             from_="NM",
             to="T1w",
             suffix="xfm.mat",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 4
     script:
