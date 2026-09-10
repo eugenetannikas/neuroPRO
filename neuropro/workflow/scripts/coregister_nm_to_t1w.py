@@ -25,7 +25,7 @@ from neuropro.qc_metrics import (
     CATASTROPHIC_NMI,
     correlation,
     normalized_mutual_information,
-    overlap_mask,
+    shared_coverage_mask,
 )
 
 nm = ants.image_read(snakemake.input.nm).clone("float")
@@ -48,9 +48,9 @@ def attempt(initial_transform=None):
         interpolator="bSpline",
     )
     moved, fixed = warped.numpy(), t1w.numpy()
-    # score where the slab and the head actually overlap, otherwise the
-    # metric mostly measures how much shared background there is
-    mask = overlap_mask(moved, fixed)
+    # score where the slab and the head actually overlap, keeping the full
+    # tissue intensity range (see shared_coverage_mask)
+    mask = shared_coverage_mask(moved, fixed)
     return {
         "reg": reg,
         "warped": warped,

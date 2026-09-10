@@ -10,7 +10,7 @@ from neuropro.qc_metrics import (
     correlation,
     flag_low_outliers,
     normalized_mutual_information,
-    overlap_mask,
+    shared_coverage_mask,
 )
 
 
@@ -93,27 +93,74 @@ def test_correlation_basics(volume):
     assert np.isnan(correlation(volume, np.ones_like(volume)))
 
 
-def test_overlap_mask_selects_shared_foreground():
+def test_coverage_mask_selects_where_both_have_data():
     rng = np.random.default_rng(3)
-    a = rng.random((10, 10, 10)) * 0.1
-    b = rng.random((10, 10, 10)) * 0.1
+    a = rng.random((10, 10, 10)) * 0.001  # near-empty background
+    b = rng.random((10, 10, 10)) * 0.001
     a[:6] += 10.0  # a's slab
     b[4:] += 10.0  # b's slab, overlapping in the 4:6 band
-    mask = overlap_mask(a, b)
+    mask = shared_coverage_mask(a, b)
     assert mask[:4].sum() == 0
     assert mask[6:].sum() == 0
-    assert mask[4:6].sum() > 0
-
-
-def test_overlap_mask_falls_back_for_near_binary_images():
-    """A percentile can land on the foreground value and select nothing."""
-    a = np.zeros((10, 10, 10))
-    b = np.zeros((10, 10, 10))
-    a[:6] = 1.0
-    b[4:] = 1.0
-    mask = overlap_mask(a, b)
-    assert mask.any()
     assert mask[4:6].all()
+
+
+def test_coverage_mask_keeps_dim_tissue():
+    """The regression that made every registration look unregistered.
+
+    A foreground-percentile mask keeps only bright voxels, which collapses the
+    joint histogram onto a narrow intensity band and drives NMI towards 1.0
+    however good the alignment is.  Coverage masking must keep dim tissue.
+    """
+    rng = np.random.default_rng(4)
+    structure = rng.random((16, 16, 16))
+    a = structure * 100.0
+    b = structure * 100.0
+    a[a < 1.0] = 0.0  # background outside the "slab"
+    b[b < 1.0] = 0.0
+    mask = shared_coverage_mask(a, b)
+    values = a[mask]
+    # a wide spread of intensities survives, not just the bright tail
+    assert values.min() < np.percentile(values, 25) < np.percentile(values, 75)
+    assert normalized_mutual_information(a, b, mask=mask) > 1.5
+
+
+def test_coverage_mask_ignores_a_single_hot_voxel():
+    """Thresholds come off a percentile, so one outlier cannot raise them."""
+    a = np.full((10, 10, 10), 5.0)
+    b = np.full((10, 10, 10), 5.0)
+    a[0, 0, 0] = 1e6
+    mask = shared_coverage_mask(a, b)
+    assert mask.mean() > 0.9
+
+
+def test_coverage_mask_falls_back_when_nothing_passes():
+    a = np.zeros((8, 8, 8))
+    b = np.zeros((8, 8, 8))
+    a[2:5] = 1.0
+    b[2:5] = 1.0
+    assert shared_coverage_mask(a, b).any()
+
+
+def test_coverage_mask_of_empty_images():
+    empty = np.zeros((8, 8, 8))
+    assert not shared_coverage_mask(empty, empty).any()
+
+
+def test_nmi_falls_as_misalignment_grows():
+    """The property the metric exists for: monotonic in displacement."""
+    rng = np.random.default_rng(5)
+    volume = rng.random((32, 32, 32)) * 0.05
+    volume[8:24, 8:24, 8:24] += 1.0
+    volume[12:20, 12:20, 12:20] += 1.0  # inner structure to shift against
+
+    scores = []
+    for shift in (0, 2, 6, 12):
+        moved = np.roll(volume, shift, axis=0)
+        mask = shared_coverage_mask(moved, volume)
+        scores.append(normalized_mutual_information(moved, volume, mask=mask))
+    assert scores == sorted(scores, reverse=True), scores
+    assert scores[0] > scores[-1] + 0.05
 
 
 # --------------------------------------------------------------------------

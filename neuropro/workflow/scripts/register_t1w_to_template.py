@@ -24,7 +24,7 @@ from neuropro.qc_metrics import (
     CATASTROPHIC_NMI,
     correlation,
     normalized_mutual_information,
-    overlap_mask,
+    shared_coverage_mask,
 )
 
 t1w = ants.image_read(snakemake.input.t1w).clone("float")
@@ -52,7 +52,7 @@ def attempt(initial_transform=None):
         interpolator="bSpline",
     )
     moved, fixed = warped.numpy(), template.numpy()
-    mask = overlap_mask(moved, fixed)
+    mask = shared_coverage_mask(moved, fixed)
     return {
         "reg": reg,
         "nmi": normalized_mutual_information(moved, fixed, mask=mask),
@@ -93,13 +93,20 @@ t1w_tpl = ants.apply_transforms(
 )
 ants.image_write(t1w_tpl, snakemake.output.t1w_tpl)
 
+# report the quality of the image that was actually written, which sits on the
+# --out_res grid rather than the template's own
+moved, fixed = t1w_tpl.numpy(), ref.numpy()
+mask = shared_coverage_mask(moved, fixed)
+reported_nmi = normalized_mutual_information(moved, fixed, mask=mask)
+reported_correlation = correlation(moved, fixed, mask=mask)
+
 with open(snakemake.output.metrics, "w") as f:
     json.dump(
         {
             "Description": "T1w to template registration quality",
             "Method": method,
-            "NormalizedMutualInformation": best["nmi"],
-            "Correlation": best["correlation"],
+            "NormalizedMutualInformation": reported_nmi,
+            "Correlation": reported_correlation,
         },
         f,
         indent=2,

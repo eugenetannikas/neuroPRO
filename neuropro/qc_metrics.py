@@ -78,24 +78,35 @@ def correlation(a, b, mask=None) -> float:
     return float(np.corrcoef(a, b)[0, 1])
 
 
-def overlap_mask(a, b, percentile: float = 60.0):
-    """Voxels that are foreground in both images.
+def shared_coverage_mask(a, b, background_fraction: float = 0.02):
+    """Voxels where both images actually hold data.
 
-    Used so a metric is computed where the two images actually overlap --
-    the NM slab covers a fraction of the T1w, and scoring over the whole
-    volume would mostly measure how much background they share.
+    Scoring the whole volume would mostly measure how much background the two
+    images share -- the NM slab covers about a fifth of the T1w -- so the
+    metric is restricted to where they overlap.  The threshold is deliberately
+    low, because it is a *coverage* test rather than a foreground one: keeping
+    the full range of tissue intensities is what gives mutual information
+    something to work with.  Selecting only bright voxels instead collapses
+    the joint histogram onto a narrow intensity band and drives the score
+    towards statistical independence no matter how good the alignment is.
+
+    Thresholds are set from the 99.5th percentile rather than the maximum, so
+    a single hot voxel cannot drag them up.
     """
     a = np.asarray(a, dtype=np.float64)
     b = np.asarray(b, dtype=np.float64)
-    a_fg = a > np.percentile(a[np.isfinite(a)], percentile)
-    b_fg = b > np.percentile(b[np.isfinite(b)], percentile)
-    both = a_fg & b_fg
+    a_finite, b_finite = a[np.isfinite(a)], b[np.isfinite(b)]
+    if a_finite.size == 0 or b_finite.size == 0:
+        return np.zeros(np.broadcast_shapes(a.shape, b.shape), dtype=bool)
+
+    a_high = np.percentile(a_finite, 99.5)
+    b_high = np.percentile(b_finite, 99.5)
+    both = (a > a_high * background_fraction) & (b > b_high * background_fraction)
     if both.any():
         return both
-    # A percentile threshold can land exactly on the foreground value when an
-    # image is near-binary (a mask, or a heavily saturated slab), leaving
-    # nothing selected.  Fall back to plain nonzero rather than handing the
-    # caller an empty mask, which would score as NaN.
+    # A near-binary image (a mask, say) can put every voxel at or below the
+    # threshold.  Fall back to plain nonzero rather than handing the caller an
+    # empty mask, which would score as NaN.
     return (a > 0) & (b > 0)
 
 
