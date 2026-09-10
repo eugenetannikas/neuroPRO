@@ -22,8 +22,31 @@ os.environ.setdefault(
 import ants
 import numpy as np
 
-nm_paths = list(snakemake.input.nm)
-images = [ants.image_read(p).clone("float") for p in nm_paths]
+
+def load_volumes(path):
+    """The 3D volumes in a NIfTI, as (label, image) pairs.
+
+    Some sites export the repeats of an NM acquisition as one 4D series
+    rather than as separate files.  Splitting them here means those repeats
+    are realigned to each other exactly like separately-exported ones,
+    instead of reaching ANTs as a 4D image it cannot register.
+    """
+    img = ants.image_read(path).clone("float")
+    if img.dimension < 4:
+        return [(path, img)]
+    volumes = ants.ndimage_to_list(img)
+    return [
+        (f"{path}[{index}]", volume.clone("float"))
+        for index, volume in enumerate(volumes)
+    ]
+
+
+nm_paths = []
+images = []
+for _path in list(snakemake.input.nm):
+    for _label, _image in load_volumes(_path):
+        nm_paths.append(_label)
+        images.append(_image)
 
 
 def register_all(target, images, paths):
@@ -91,7 +114,8 @@ with open(snakemake.output.json, "w") as f:
     json.dump(
         {
             "Description": "Average of rigidly realigned NM-GRE magnitude images",
-            "SourceFiles": nm_paths,
+            "SourceFiles": list(snakemake.input.nm),
+            "VolumesRealigned": len(images),
             "NMVariant": snakemake.config["nm_variant"],
             "Echoes": snakemake.config["nm_echoes"],
             "RealignmentPasses": 1 if len(images) == 1 else 2,
