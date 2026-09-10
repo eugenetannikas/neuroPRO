@@ -1,13 +1,9 @@
-"""Choose the best T1w run for a subject.
+"""Choose the best T1w run for a subject and copy it into the derivatives.
 
-Ranking:
-1. per-subject override from the --t1w_choices TSV, if given
-2. protocol preference: MPRAGE > FLASH (distortion corrected) > FLASH_ND
-3. among the preferred protocol, --t1w_strategy 'last'/'first' by SeriesNumber
-
-A simple sharpness metric (variance of the Laplacian over foreground voxels,
-normalized by foreground intensity variance) is computed for every candidate
-and stored in the output sidecar so choices can be audited.
+The ranking rules live in neuropro/t1w_selection.py so they can be unit
+tested; this script is the Snakemake wrapper around them.  A sharpness metric
+is computed for every candidate and stored in the output sidecar, so a choice
+can be audited (and so --t1w_strategy sharpest has something to sort on).
 """
 
 import csv
@@ -16,46 +12,32 @@ import shutil
 from pathlib import Path
 
 import nibabel as nib
-import numpy as np
-from scipy.ndimage import laplace
 
-
-def protocol_rank(desc):
-    desc_upper = desc.upper()
-    if "MPRAGE" in desc_upper:
-        return 0
-    if desc_upper.endswith("_ND"):
-        return 2
-    return 1
-
-
-def sharpness(nii_path):
-    img = nib.load(nii_path)
-    data = np.asanyarray(img.dataobj).astype(np.float32)
-    data = np.squeeze(data)
-    fg = data > np.percentile(data, 50)
-    if fg.sum() == 0 or data[fg].var() == 0:
-        return 0.0
-    lap = laplace(data / (data[fg].mean() + 1e-9))
-    return float(lap[fg].var())
-
+from neuropro.discovery import sidecar_for, strip_nifti_ext
+from neuropro.t1w_selection import choose, protocol_rank, sharpness
 
 subject = snakemake.wildcards.subject
 niis = list(snakemake.input.niis)
-jsons = list(snakemake.input.jsons)
+
+# Sidecars are matched by name rather than by position: only the candidates
+# that actually have one are passed in as inputs, so the two lists are not
+# necessarily parallel.
+sidecars = {Path(p).name: p for p in snakemake.input.jsons}
 
 candidates = []
-for nii, sidecar in zip(niis, jsons):
+for nii in niis:
     meta = {}
-    if Path(sidecar).exists():
+    sidecar = sidecar_for(Path(nii))
+    if sidecar is not None and sidecar.name in sidecars:
         with open(sidecar) as f:
             meta = json.load(f)
+    series_number = meta.get("SeriesNumber")
     candidates.append(
         {
             "path": nii,
             "filename": Path(nii).name,
             "series_description": meta.get("SeriesDescription", ""),
-            "series_number": meta.get("SeriesNumber", -1),
+            "series_number": series_number if isinstance(series_number, int) else None,
             "protocol_rank": protocol_rank(meta.get("SeriesDescription", "")),
             "sharpness": sharpness(nii),
             "meta": meta,
@@ -68,31 +50,27 @@ selection_method = None
 if snakemake.params.choices_tsv:
     with open(snakemake.params.choices_tsv) as f:
         for row in csv.DictReader(f, delimiter="\t"):
-            row_sub = row["subject"].removeprefix("sub-")
-            if row_sub == subject:
-                matches = [
-                    c for c in candidates if c["filename"] == row["filename"]
-                ]
-                if not matches:
-                    raise ValueError(
-                        f"--t1w_choices entry '{row['filename']}' for "
-                        f"sub-{subject} does not match any T1w candidate: "
-                        f"{[c['filename'] for c in candidates]}"
-                    )
-                chosen = matches[0]
-                selection_method = "manual (t1w_choices)"
+            if row["subject"].removeprefix("sub-") != subject:
+                continue
+            matches = [c for c in candidates if c["filename"] == row["filename"]]
+            if not matches:
+                raise ValueError(
+                    f"--t1w_choices entry '{row['filename']}' for "
+                    f"sub-{subject} does not match any T1w candidate: "
+                    f"{[c['filename'] for c in candidates]}"
+                )
+            chosen = matches[0]
+            selection_method = "manual (t1w_choices)"
 
 if chosen is None:
-    best_rank = min(c["protocol_rank"] for c in candidates)
-    pool = [c for c in candidates if c["protocol_rank"] == best_rank]
-    reverse = snakemake.params.strategy == "last"
-    pool.sort(key=lambda c: c["series_number"], reverse=reverse)
-    chosen = pool[0]
-    selection_method = (
-        f"protocol preference + {snakemake.params.strategy} SeriesNumber"
-    )
+    chosen, selection_method = choose(candidates, snakemake.params.strategy)
 
-shutil.copyfile(chosen["path"], snakemake.output.nii)
+# The chosen run may be uncompressed (.nii) while the output is always
+# .nii.gz, so copy the bytes only when the compression already matches.
+if strip_nifti_ext(chosen["path"]) + ".nii.gz" == chosen["path"]:
+    shutil.copyfile(chosen["path"], snakemake.output.nii)
+else:
+    nib.save(nib.load(chosen["path"]), snakemake.output.nii)
 
 sidecar_out = dict(chosen["meta"])
 sidecar_out["SourceFile"] = chosen["path"]

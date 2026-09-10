@@ -36,16 +36,44 @@ parse_args:
     nargs: '+'
     default: [1, 2, 3]
 
+  --nm_layout:
+    help: "Naming convention of the NM-GRE images. 'auto' tries each in turn
+      and uses the first that matches: 'cfmm' (sourcedata/**/nm-gre/NM-GRE_s<s>_e<e>),
+      'dcm2niix' (raw <series>_<desc>_e<echo>_<stamp> export), 'bids'
+      (sub-X_acq-NM_echo-N_part-mag_MEGRE under anat/). (default: %(default)s)"
+    default: auto
+    choices:
+      - auto
+      - cfmm
+      - dcm2niix
+      - bids
+
+  --nm_pattern:
+    help: "Escape hatch for datasets none of the built-in layouts match: a glob
+      for the NM magnitude images, relative to each subject directory (e.g.
+      'nm/*_mag.nii.gz'). Overrides --nm_layout. (default: %(default)s)"
+    default: null
+
+  --include_combecho:
+    help: "Include scanner-side combined-echo (CombEcho) series in the NM
+      average. Off by default, since combining them with the individual echoes
+      they are derived from double-counts that signal. (default: %(default)s)"
+    action: store_true
+
   --t1w_strategy:
     help: "How to choose among multiple T1w runs of the preferred protocol.
-      MPRAGE is always preferred over FLASH, and distortion-corrected FLASH over
-      the _ND variant. 'last' picks the highest SeriesNumber (a re-scan is
-      usually acquired because earlier runs were corrupted by motion), 'first'
-      picks the lowest. (default: %(default)s)"
+      A recognised 3D T1 sequence (MPRAGE, MP2RAGE, BRAVO, FSPGR, TFE, ...) is
+      preferred over an unrecognised one, and both over a distortion-uncorrected
+      '_ND' export. 'last' picks the highest SeriesNumber (a re-scan is usually
+      acquired because earlier runs were corrupted by motion), 'first' the
+      lowest, 'sharpest' the run with the highest Laplacian-variance sharpness.
+      When SeriesNumber is unavailable, 'last'/'first' fall back to the run-
+      entity and then to sharpness. (default: %(default)s)"
     default: last
     choices:
       - last
       - first
+      - sharpest
 
   --t1w_choices:
     help: "Optional TSV with columns 'subject' and 'filename' to manually

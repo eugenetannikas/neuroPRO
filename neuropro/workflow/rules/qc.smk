@@ -16,7 +16,7 @@ rule qc_coreg:
             datatype="qc",
             desc="coreg",
             suffix="qc.png",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     script:
         "../scripts/qc_snapshots.py"
@@ -35,7 +35,7 @@ rule qc_seg:
             datatype="qc",
             desc="seg",
             suffix="qc.png",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     script:
         "../scripts/qc_snapshots.py"
@@ -55,48 +55,69 @@ rule qc_norm:
             datatype="qc",
             desc="norm",
             suffix="qc.png",
-            subject="{subject}",
+            **subj_wildcards,
+        ),
+    script:
+        "../scripts/qc_snapshots.py"
+
+
+rule qc_nm:
+    """Native-space NM average, for entries with no T1w to overlay."""
+    input:
+        nm=rules.realign_average_nm.output.avg,
+    params:
+        mode="nm",
+    output:
+        png=bids(
+            root=root,
+            datatype="qc",
+            desc="nm",
+            suffix="qc.png",
+            **subj_wildcards,
         ),
     script:
         "../scripts/qc_snapshots.py"
 
 
 rule group_qc:
-    """Aggregate per-subject QC info into a group summary TSV and HTML index."""
+    """Aggregate per-subject QC info into a group summary TSV and HTML index.
+
+    Entries without a T1w contribute their NM motion numbers and a status of
+    'nm-only', so a partially processed subject is visible in the summary
+    rather than missing from it.
+    """
     input:
-        t1w_jsons=expand(
-            bids(
-                root=root,
-                datatype="anat",
-                desc="selected",
-                suffix="T1w.json",
-                subject="{subject}",
-            ),
-            subject=subjects,
+        t1w_jsons=for_each(
+            full_entries, datatype="anat", desc="selected", suffix="T1w.json"
         ),
-        motion_tsvs=expand(
-            bids(
-                root=root,
-                datatype="qc",
-                desc="motion",
-                suffix="NM.tsv",
-                subject="{subject}",
-            ),
-            subject=subjects,
+        full_motion=for_each(
+            full_entries, datatype="qc", desc="motion", suffix="NM.tsv"
         ),
-        pngs=expand(
-            bids(
-                root=root,
-                datatype="qc",
-                desc="{qc}",
-                suffix="qc.png",
-                subject="{subject}",
-            ),
-            subject=subjects,
-            qc=["coreg", "seg", "norm"],
+        nmonly_motion=for_each(
+            nmonly_entries, datatype="qc", desc="motion", suffix="NM.tsv"
+        ),
+        coreg_metrics=for_each(
+            full_entries, datatype="qc", desc="coreg", suffix="metrics.json"
+        ),
+        norm_metrics=for_each(
+            full_entries, datatype="qc", desc="norm", suffix="metrics.json"
+        ),
+        pngs=(
+            [
+                for_each(full_entries, datatype="qc", desc=qc, suffix="qc.png")
+                for qc in ["coreg", "seg", "norm"]
+            ]
+            + [for_each(nmonly_entries, datatype="qc", desc="nm", suffix="qc.png")]
         ),
     params:
-        subjects=subjects,
+        full=[
+            {"subject": e.subject, "session": e.session, "label": e.label}
+            for e in full_entries
+        ],
+        nmonly=[
+            {"subject": e.subject, "session": e.session, "label": e.label}
+            for e in nmonly_entries
+        ],
     output:
         tsv=os.path.join(root, "group", "qc_summary.tsv"),
         html=os.path.join(root, "group", "qc_index.html"),

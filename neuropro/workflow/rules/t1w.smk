@@ -27,14 +27,14 @@ rule select_t1w:
             datatype="anat",
             desc="selected",
             suffix="T1w.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
         json=bids(
             root=root,
             datatype="anat",
             desc="selected",
             suffix="T1w.json",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     script:
         "../scripts/select_t1w.py"
@@ -50,7 +50,7 @@ rule n4_t1w:
             datatype="anat",
             desc="preproc",
             suffix="T1w.nii.gz",
-            subject="{subject}",
+            **subj_wildcards,
         ),
     threads: 4
     script:

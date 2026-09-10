@@ -1,4 +1,10 @@
-"""Aggregate per-subject QC into a group summary TSV and an HTML index."""
+"""Aggregate per-subject QC into a group summary TSV and an HTML index.
+
+Every entry that was processed appears in the summary, including those that
+only got as far as the native-space NM average (no T1w to coregister to).
+Their status column says so, and their T1w columns are blank -- a partially
+processed subject should be visible in the table rather than missing from it.
+"""
 
 import html
 import json
@@ -6,44 +12,104 @@ import os
 
 import pandas as pd
 
+from neuropro.qc_metrics import flag_low_outliers
+
+
+def registration_metrics(path, prefix):
+    """Registration-quality numbers from one metrics sidecar."""
+    with open(path) as f:
+        data = json.load(f)
+    return {
+        f"{prefix}_nmi": data.get("NormalizedMutualInformation"),
+        f"{prefix}_correlation": data.get("Correlation"),
+        f"{prefix}_method": data.get("Method", ""),
+    }
+
+
+def motion_summary(motion_tsv):
+    motion = pd.read_csv(motion_tsv, sep="\t")
+    return {
+        "nm_n_images": len(motion),
+        "nm_max_translation_mm": motion["translation_mm"].max(),
+        "nm_max_rotation_deg": motion["rotation_deg"].max(),
+    }
+
+
+def identity(entry):
+    row = {"subject": f"sub-{entry['subject']}"}
+    if entry.get("session"):
+        row["session"] = f"ses-{entry['session']}"
+    return row
+
+
 rows = []
-for subject, t1w_json, motion_tsv in zip(
-    snakemake.params.subjects,
+
+for entry, t1w_json, motion_tsv, coreg_json, norm_json in zip(
+    snakemake.params.full,
     snakemake.input.t1w_jsons,
-    snakemake.input.motion_tsvs,
+    snakemake.input.full_motion,
+    snakemake.input.coreg_metrics,
+    snakemake.input.norm_metrics,
 ):
     with open(t1w_json) as f:
         sel = json.load(f)
-    chosen = next(
-        (c for c in sel.get("Candidates", []) if c.get("chosen")), {}
-    )
-    motion = pd.read_csv(motion_tsv, sep="\t")
-    rows.append(
+    chosen = next((c for c in sel.get("Candidates", []) if c.get("chosen")), {})
+    row = identity(entry)
+    row.update(
         {
-            "subject": f"sub-{subject}",
+            "status": "complete",
             "t1w_chosen": os.path.basename(sel.get("SourceFile", "")),
             "t1w_protocol": chosen.get("series_description", ""),
             "t1w_series_number": chosen.get("series_number", ""),
             "t1w_n_candidates": len(sel.get("Candidates", [])),
             "t1w_sharpness": chosen.get("sharpness", ""),
             "t1w_selection_method": sel.get("SelectionMethod", ""),
-            "nm_n_images": len(motion),
-            "nm_max_translation_mm": motion["translation_mm"].max(),
-            "nm_max_rotation_deg": motion["rotation_deg"].max(),
         }
     )
+    row.update(motion_summary(motion_tsv))
+    row.update(registration_metrics(coreg_json, "coreg"))
+    row.update(registration_metrics(norm_json, "norm"))
+    rows.append(row)
+
+for entry, motion_tsv in zip(snakemake.params.nmonly, snakemake.input.nmonly_motion):
+    row = identity(entry)
+    row["status"] = "nm-only (no T1w)"
+    row.update(motion_summary(motion_tsv))
+    rows.append(row)
 
 df = pd.DataFrame(rows)
+
+# Flag registrations that sit far below the rest of the cohort.  Thresholds
+# are cohort-relative rather than absolute: what counts as a good NMI depends
+# on sequence, field strength and FOV, so a number tuned on one dataset would
+# mislabel every subject of the next one.
+flags = [[] for _ in range(len(df))]
+for column, label in [
+    ("coreg_nmi", "coreg"),
+    ("norm_nmi", "normalization"),
+]:
+    if column not in df.columns:
+        continue
+    for index, is_outlier in enumerate(flag_low_outliers(df[column].tolist())):
+        if is_outlier:
+            flags[index].append(f"low {label} NMI")
+if len(df):
+    df["qc_flags"] = ["; ".join(f) for f in flags]
+
+sort_cols = [c for c in ("subject", "session") if c in df.columns]
+if sort_cols:
+    df = df.sort_values(sort_cols).reset_index(drop=True)
 df.to_csv(snakemake.output.tsv, sep="\t", index=False)
 
-# simple html index with links to the per-subject snapshots
+# simple html index with links to the per-subject snapshots.  Snapshots are
+# grouped by the subject _and_ session entities of their filename, so the
+# sessions of one subject stay in separate sections.
 group_dir = os.path.dirname(snakemake.output.html)
-png_by_subject = {}
+png_by_entry = {}
 for png in snakemake.input.pngs:
-    sub = os.path.basename(png).split("_")[0]
-    png_by_subject.setdefault(sub, []).append(
-        os.path.relpath(png, group_dir)
-    )
+    name_parts = os.path.basename(png).split("_")
+    key = "_".join(p for p in name_parts if p.startswith(("sub-", "ses-")))
+    png_by_entry.setdefault(key, []).append(os.path.relpath(png, group_dir))
 
 parts = [
     "<html><head><title>neuroPRO QC</title>",
@@ -54,9 +120,9 @@ parts = [
     df.to_html(index=False, border=0),
     "<h1>Snapshots</h1>",
 ]
-for sub in sorted(png_by_subject):
-    parts.append(f"<h2>{html.escape(sub)}</h2>")
-    for rel in sorted(png_by_subject[sub]):
+for key in sorted(png_by_entry):
+    parts.append(f"<h2>{html.escape(key)}</h2>")
+    for rel in sorted(png_by_entry[key]):
         parts.append(
             f'<p><a href="{rel}">{html.escape(os.path.basename(rel))}</a>'
             f'<br><img src="{rel}" loading="lazy"></p>'

@@ -10,78 +10,64 @@ configfile: "config/snakebids.yml"
 root = os.path.expandvars(config["root"])
 
 
-# T1w runs come in mixed naming (with and without acq-), which pybids/
-# snakebids cannot express as a single path template, and the NM-GRE images
-# live in sourcedata/ with non-BIDS names -- so both inputs are discovered
-# with planning-time globbing in rules/common.smk
+# Input images are discovered at planning time (see rules/common.smk and
+# neuropro/discovery.py): T1w runs use mixed naming that pybids/snakebids
+# cannot express as one path template, and NM-GRE images come in several
+# conventions, none of which is reliably BIDS.
 include: "rules/common.smk"
 
 
 wildcard_constraints:
     subject="[a-zA-Z0-9]+",
+    session="[a-zA-Z0-9]+",
     tissue="[a-zA-Z]+",
+
+
+def for_each(entry_list, **entities):
+    """Expand a bids() path over the given subject/session entries."""
+    if not entry_list:
+        return []
+    return expand(
+        bids(root=root, **entities, **subj_wildcards),
+        zip,
+        **entities_of(entry_list),
+    )
+
+
+def for_each_entry(**entities):
+    """Expand over every entry that has a T1w (the full pipeline)."""
+    return for_each(full_entries, **entities)
 
 
 rule all_participant:
     default_target: True
     input:
+        # ---- entries with a T1w: the full pipeline ----
         # final deliverable: smoothed, normalized NM average
-        expand(
-            bids(
-                root=root,
-                datatype="anat",
-                space=template_name,
-                desc="smoothed",
-                suffix="NM.nii.gz",
-                subject="{subject}",
-            ),
-            subject=subjects,
+        for_each_entry(
+            datatype="anat",
+            space=template_name,
+            desc="smoothed",
+            suffix="NM.nii.gz",
         ),
         # NM average coregistered to the subject's T1w
-        expand(
-            bids(
-                root=root,
-                datatype="anat",
-                space="T1w",
-                desc="avg",
-                suffix="NM.nii.gz",
-                subject="{subject}",
-            ),
-            subject=subjects,
-        ),
+        for_each_entry(datatype="anat", space="T1w", desc="avg", suffix="NM.nii.gz"),
         # tissue segmentations
-        expand(
-            bids(
-                root=root,
-                datatype="anat",
-                label="{tissue}",
-                suffix="probseg.nii.gz",
-                subject="{subject}",
-            ),
-            subject=subjects,
-            tissue=["CSF", "GM", "WM"],
-        ),
-        expand(
-            bids(
-                root=root,
-                datatype="anat",
-                suffix="dseg.nii.gz",
-                subject="{subject}",
-            ),
-            subject=subjects,
-        ),
+        [
+            for_each_entry(datatype="anat", label=tissue, suffix="probseg.nii.gz")
+            for tissue in ["CSF", "GM", "WM"]
+        ],
+        for_each_entry(datatype="anat", suffix="dseg.nii.gz"),
         # QC snapshots
-        expand(
-            bids(
-                root=root,
-                datatype="qc",
-                desc="{qc}",
-                suffix="qc.png",
-                subject="{subject}",
-            ),
-            subject=subjects,
-            qc=["coreg", "seg", "norm"],
-        ),
+        [
+            for_each_entry(datatype="qc", desc=qc, suffix="qc.png")
+            for qc in ["coreg", "seg", "norm"]
+        ],
+        # ---- entries without a T1w: as far as the data allows ----
+        # realigned + averaged NM in native space, with motion QC
+        for_each(nmonly_entries, datatype="anat", desc="avg", suffix="NM.nii.gz"),
+        for_each(nmonly_entries, datatype="qc", desc="motion", suffix="NM.tsv"),
+        for_each(nmonly_entries, datatype="qc", desc="nm", suffix="qc.png"),
 
 
 rule all_group:
