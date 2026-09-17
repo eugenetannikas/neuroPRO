@@ -43,13 +43,15 @@ rule all_participant:
     default_target: True
     input:
         # ---- entries with a T1w: the full pipeline ----
-        # final deliverable: smoothed, normalized NM average
+        # final deliverable: denoised NM average, normalized to the template
         for_each_entry(
             datatype="anat",
             space=template_name,
-            desc="smoothed",
+            desc="denoised",
             suffix="NM.nii.gz",
         ),
+        # denoised NM average in native space (the cross-scan comparison surface)
+        for_each_entry(datatype="anat", desc="denoised", suffix="NM.nii.gz"),
         # NM average coregistered to the subject's T1w
         for_each_entry(datatype="anat", space="T1w", desc="avg", suffix="NM.nii.gz"),
         # QC snapshots
@@ -60,6 +62,7 @@ rule all_participant:
         # ---- entries without a T1w: as far as the data allows ----
         # realigned + averaged NM in native space, with motion QC
         for_each(nmonly_entries, datatype="anat", desc="avg", suffix="NM.nii.gz"),
+        for_each(nmonly_entries, datatype="anat", desc="denoised", suffix="NM.nii.gz"),
         for_each(nmonly_entries, datatype="qc", desc="motion", suffix="NM.tsv"),
         for_each(nmonly_entries, datatype="qc", desc="nm", suffix="qc.png"),
 

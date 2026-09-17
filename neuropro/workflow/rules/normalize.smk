@@ -3,9 +3,8 @@ Spatial normalization:
 
 - T1w -> template registration (affine + SyN; the scriptable equivalent of the
   deformation field estimated by SPM unified segmentation)
-- normalization of the NM average to template space by composing the
-  NM->T1w rigid with the T1w->template warp (SPM Normalise: Write)
-- Gaussian smoothing (SPM Smooth)
+- normalization of the denoised NM average to template space by composing
+  the NM->T1w rigid with the T1w->template warp (SPM Normalise: Write)
 """
 
 
@@ -54,9 +53,9 @@ rule register_t1w_to_template:
 
 
 rule normalize_nm:
-    """Resample the NM average into template space (rigid + warp composed)."""
+    """Resample the denoised NM average into template space (rigid + warp composed)."""
     input:
-        nm=rules.realign_average_nm.output.avg,
+        nm=rules.denoise_nm.output.nii,
         nm_to_t1w=rules.coregister_nm_to_t1w.output.xfm,
         t1w_to_tpl=rules.register_t1w_to_template.output.fwd_xfm,
         template=template_t1w,
@@ -67,7 +66,7 @@ rule normalize_nm:
             root=root,
             datatype="anat",
             space=template_name,
-            desc="avg",
+            desc="denoised",
             suffix="NM.nii.gz",
             **subj_wildcards,
         ),
@@ -75,29 +74,3 @@ rule normalize_nm:
     script:
         "../scripts/normalize_nm.py"
 
-
-rule smooth_nm:
-    """Isotropic Gaussian smoothing of the normalized NM average."""
-    input:
-        nii=rules.normalize_nm.output.nm_tpl,
-    params:
-        fwhm=config["fwhm"],
-    output:
-        nii=bids(
-            root=root,
-            datatype="anat",
-            space=template_name,
-            desc="smoothed",
-            suffix="NM.nii.gz",
-            **subj_wildcards,
-        ),
-        json=bids(
-            root=root,
-            datatype="anat",
-            space=template_name,
-            desc="smoothed",
-            suffix="NM.json",
-            **subj_wildcards,
-        ),
-    script:
-        "../scripts/smooth_nm.py"

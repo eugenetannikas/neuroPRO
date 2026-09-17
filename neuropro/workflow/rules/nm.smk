@@ -4,6 +4,8 @@ NM-MRI (neuromelanin-sensitive GRE) processing:
 - rigid realignment of all magnitude echo images to their mean (two-pass,
   the scriptable equivalent of SPM Realign: estimate & reslice, register to
   mean) followed by averaging (SPM ImCalc (i1+i2+..+iN)/N)
+- non-local-means denoising of the average in native space (in place of
+  SPM Smooth; edge-preserving, and applied before any resampling)
 - rigid coregistration of the NM average to the subject's T1w
   (SPM Coregister with normalised mutual information)
 """
@@ -38,6 +40,30 @@ rule realign_average_nm:
     threads: 4
     script:
         "../scripts/realign_average_nm.py"
+
+
+rule denoise_nm:
+    """Non-local-means denoising of the realigned NM average (native space)."""
+    input:
+        nii=rules.realign_average_nm.output.avg,
+    output:
+        nii=bids(
+            root=root,
+            datatype="anat",
+            desc="denoised",
+            suffix="NM.nii.gz",
+            **subj_wildcards,
+        ),
+        json=bids(
+            root=root,
+            datatype="anat",
+            desc="denoised",
+            suffix="NM.json",
+            **subj_wildcards,
+        ),
+    threads: 4
+    script:
+        "../scripts/denoise_nm.py"
 
 
 rule coregister_nm_to_t1w:

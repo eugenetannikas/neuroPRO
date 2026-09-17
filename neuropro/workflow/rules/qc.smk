@@ -27,7 +27,7 @@ rule qc_norm:
     input:
         template=template_t1w,
         t1w_tpl=rules.register_t1w_to_template.output.t1w_tpl,
-        nm_tpl=rules.smooth_nm.output.nii,
+        nm_tpl=rules.normalize_nm.output.nm_tpl,
     params:
         mode="norm",
     output:
