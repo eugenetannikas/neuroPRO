@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from neuropro.discovery import (
+    group_by_run,
     missing_participants,
     scan_dataset,
     sidecar_for,
@@ -42,11 +43,6 @@ def template_file(suffix, **entities):
 
 
 template_t1w = template_file("T1w", res="01")
-template_mask = template_file("mask", res="01", desc="brain")
-template_probseg = {
-    tissue: template_file("probseg", res="01", label=tissue)
-    for tissue in ["CSF", "GM", "WM"]
-}
 
 
 # ---- dataset scan ----
@@ -171,3 +167,8 @@ def get_t1w_candidate_jsons(wildcards):
 
 def get_nm_files(wildcards):
     return [i.path for i in entry_for(wildcards).nm]
+
+
+def get_nm_runs(wildcards):
+    """NM images grouped by acquisition: echoes together, runs apart."""
+    return group_by_run(entry_for(wildcards).nm)

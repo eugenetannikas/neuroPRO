@@ -22,31 +22,12 @@ rule qc_coreg:
         "../scripts/qc_snapshots.py"
 
 
-rule qc_seg:
-    """T1w with tissue segmentation boundaries."""
-    input:
-        bg=rules.n4_t1w.output.nii,
-        overlay=rules.segment_t1w.output.dseg,
-    params:
-        mode="seg",
-    output:
-        png=bids(
-            root=root,
-            datatype="qc",
-            desc="seg",
-            suffix="qc.png",
-            **subj_wildcards,
-        ),
-    script:
-        "../scripts/qc_snapshots.py"
-
-
 rule qc_norm:
     """Template with normalized T1w edges + normalized NM and brainstem zoom."""
     input:
         template=template_t1w,
         t1w_tpl=rules.register_t1w_to_template.output.t1w_tpl,
-        nm_tpl=rules.smooth_nm.output.nii,
+        nm_tpl=rules.normalize_nm.output.nm_tpl,
     params:
         mode="norm",
     output:

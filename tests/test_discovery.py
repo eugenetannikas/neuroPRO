@@ -500,3 +500,28 @@ def test_missing_participants_are_reported(tmp_path):
     assert missing_participants(tmp_path, ["01", "02"]) == []
     assert missing_participants(tmp_path, None) == []
     assert missing_participants(tmp_path, []) == []
+
+
+def test_group_by_run_keeps_echoes_together():
+    from neuropro.discovery import NMImage, group_by_run
+
+    imgs = [
+        NMImage(path="/x/NM-GRE_s6_e1.nii.gz", series=6, echo=1),
+        NMImage(path="/x/NM-GRE_s6_e2.nii.gz", series=6, echo=2),
+        NMImage(path="/x/NM-GRE_s7_e1.nii.gz", series=7, echo=1),
+    ]
+    assert group_by_run(imgs) == [
+        ["/x/NM-GRE_s6_e1.nii.gz", "/x/NM-GRE_s6_e2.nii.gz"],
+        ["/x/NM-GRE_s7_e1.nii.gz"],
+    ]
+
+
+def test_run_key_falls_back_to_filename_without_echo():
+    from neuropro.discovery import NMImage
+
+    a = NMImage(path="/x/sub-01_acq-NM_echo-1_part-mag_MEGRE.nii.gz", echo=1)
+    b = NMImage(path="/x/sub-01_acq-NM_echo-2_part-mag_MEGRE.nii.gz", echo=2)
+    c = NMImage(path="/x/sub-01_acq-NM_run-2_echo-1_part-mag_MEGRE.nii.gz", echo=1)
+    assert a.run_key == b.run_key
+    assert a.run_key != c.run_key
+

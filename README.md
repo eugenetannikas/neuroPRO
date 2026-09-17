@@ -5,17 +5,17 @@ Snakebids/Snakemake BIDS app that preprocesses neuromelanin-sensitive MRI
 substantia nigra (SN) segmentation.
 
 It is a scriptable re-implementation of a manual SPM12 workflow
-(Realign → ImCalc average → Coregister → Segment → Normalise → Smooth),
+(Realign → ImCalc average → Coregister → Normalise → Smooth), with
+non-local-means denoising in place of the Gaussian smooth,
 using ANTs (via ANTsPy) instead of the SPM GUI:
 
 | Step | SPM (manual) | neuroPRO |
 |---|---|---|
-| 1. Realign & reslice NM images | SPM Realign (register to mean) | two-pass rigid registration to the mean (Mattes MI, B-spline reslice) |
-| 2. Average | ImCalc `(i1+i2+i3)/3` | mean of all realigned NM magnitude images |
-| 3. Co-registration | SPM Coregister (NMI) | rigid NM avg → T1w (Mattes MI) |
-| 4. Segmentation | SPM unified segmentation | Atropos with template tissue priors (CSF/GM/WM) warped to native space |
-| 5. Normalise (write), 1 mm | deformation field `y_` | affine+SyN T1w → MNI152NLin2009cAsym, composed with the rigid from step 3, single-interpolation resample |
-| 6. Smooth, 1 mm FWHM | SPM Smooth | Gaussian smoothing |
+| 1. Realign & reslice NM images | SPM Realign (register to mean) | echoes of one run are combined by a plain mean (they share an excitation, so they are never registered to each other); separate runs are then two-pass rigidly registered to their mean (Mattes MI, B-spline reslice). A single run passes through untouched. |
+| 2. Average | ImCalc `(i1+i2+i3)/3` | mean of the realigned runs |
+| 3. Denoise | SPM Smooth (1 mm Gaussian, after normalise) | non-local means (ANTs DenoiseImage, Rician) on the native-space average, before any resampling |
+| 4. Co-registration | SPM Coregister (NMI) | rigid NM avg → T1w (Mattes MI) |
+| 5. Normalise (write), 1 mm | deformation field `y_` | affine+SyN T1w → MNI152NLin2009cAsym, composed with the rigid from step 4, single-interpolation resample of the denoised average |
 
 ## Input data layout
 
@@ -56,7 +56,9 @@ Discovery is driven by the *images*, not by their sidecars, so:
 
 Siemens exports each acquisition twice — distortion corrected
 (SeriesDescription `NM-GRE`) and uncorrected (`NM-GRE_ND`); `--nm_variant`
-picks between them and `--nm_echoes` subsets echoes. **Filters only ever
+picks between them and `--nm_echoes` subsets echoes (default: echo 1 only —
+the shortest TE carries the most signal and the least T2\*-eroded NM contrast;
+later echoes add noise about as fast as signal). **Filters only ever
 subset what is present.** If the requested variant or echoes do not exist in
 a dataset, the filter is relaxed and the reason reported, rather than
 silently leaving the subject with nothing — an empty result is nearly always
@@ -70,7 +72,7 @@ layout matched, and any filter that had to be relaxed.
 A subject with NM images but no anatomical is **not** skipped. Realignment,
 averaging and motion QC need no T1w, so those run and produce
 `desc-avg_NM.nii.gz`, the motion TSV and a native-space QC snapshot. Only
-coregistration, segmentation and normalization are skipped. The group summary
+coregistration and normalization are skipped. The group summary
 lists these with a status of `nm-only`.
 
 ### Sessions
@@ -103,24 +105,25 @@ subjects can be overridden with `--t1w_choices choices.tsv` (columns:
 sub-XXX/anat/
   sub-XXX_desc-selected_T1w.nii.gz          chosen T1w run (+ provenance json)
   sub-XXX_desc-preproc_T1w.nii.gz           N4 bias-corrected T1w
-  sub-XXX_desc-avg_NM.nii.gz                realigned + averaged NM (native)
+  sub-XXX_desc-avg_NM.nii.gz                realigned + averaged NM (native, raw)
+  sub-XXX_desc-denoised_NM.nii.gz           NLM-denoised average (native)  <- compare scans on this
   sub-XXX_space-T1w_desc-avg_NM.nii.gz      NM average coregistered to T1w
-  sub-XXX_label-{CSF,GM,WM}_probseg.nii.gz  tissue probabilities (native T1w)
-  sub-XXX_dseg.nii.gz                       1=CSF 2=GM 3=WM
-  sub-XXX_desc-brain_mask.nii.gz
   sub-XXX_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
-  sub-XXX_space-MNI152NLin2009cAsym_desc-avg_NM.nii.gz
-  sub-XXX_space-MNI152NLin2009cAsym_desc-smoothed_NM.nii.gz   <- final image
+  sub-XXX_space-MNI152NLin2009cAsym_desc-denoised_NM.nii.gz   <- template-space image
 sub-XXX/xfm/    NM→T1w rigid (.mat), T1w↔MNI composite warps (.h5)
-sub-XXX/qc/     coreg / seg / norm snapshot PNGs, NM motion table,
+sub-XXX/qc/     coreg / norm snapshot PNGs, NM motion table,
                 desc-{coreg,norm}_metrics.json registration quality
 
 (paths gain a ses-YYY entity on sessioned datasets; a subject with no
-T1w gets only desc-avg_NM, the motion table and a desc-nm QC snapshot)
+T1w gets desc-avg_NM, desc-denoised_NM, the motion table and a desc-nm QC
+snapshot)
 ```
 
-The `space-MNI152NLin2009cAsym_desc-smoothed_NM` image is the equivalent of
-the `sw*` file in the SPM workflow — use it to draw the LC/SN ROIs.
+The `space-MNI152NLin2009cAsym_desc-denoised_NM` image is the equivalent of
+the `sw*` file in the SPM workflow. Cross-scan comparisons are meant to be
+done on the native-space `desc-denoised_NM`; the raw `desc-avg_NM` is kept so
+noise statistics (background SD, within-ROI SD) can be measured on undenoised
+data.
 
 ## Running
 
@@ -141,7 +144,7 @@ pixi run neuropro /path/to/bids_dir /path/to/derivatives group --cores 1
 
 Useful options: `--nm_layout`, `--nm_pattern`, `--nm_variant`,
 `--nm_echoes`, `--include_combecho`, `--t1w_strategy`, `--t1w_choices`,
-`--fwhm` (default 1 mm), `--out_res` (default 1 mm),
+`--out_res` (default 1 mm),
 `--template_dir`/`--template_name`.  All Snakemake flags work too (`-n` for
 dry-run, `--keep-going` to let other subjects finish when one fails,
 `--slurm` etc.).
@@ -159,8 +162,7 @@ every change.
 
 ## Template
 
-`tpl-MNI152NLin2009cAsym` (res-01 T1w, brain mask, CSF/GM/WM probsegs from
-TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
+`tpl-MNI152NLin2009cAsym` (res-01 T1w from TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
 template; for pediatric cohorts pass a pediatric template via
 `--template_dir`/`--template_name`.  Entities are matched by glob, so
 `res-1` as well as `res-01`, and the extra `cohort-` entity that
