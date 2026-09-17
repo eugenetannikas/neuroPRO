@@ -105,57 +105,6 @@ def snapshot_overlay(bg_path, ov_path, out_png, title):
     plt.close(fig)
 
 
-def snapshot_seg(bg_path, dseg_path, out_png, title):
-    bg_img, bg = load(bg_path)
-    _, dseg = load(dseg_path)
-    zooms = bg_img.header.get_zooms()[:3]
-    lo, hi = norm_range(bg)
-    colors = {1: (0.2, 0.4, 1.0), 2: (1.0, 0.4, 0.2), 3: (0.2, 1.0, 0.4)}
-
-    n_cols = 5
-    fig, axes = plt.subplots(
-        3, n_cols, figsize=(3 * n_cols, 9), facecolor="black"
-    )
-    for row, axis in enumerate([2, 1, 0]):
-        for col, index in enumerate(bbox_indices(dseg, axis, n_cols)):
-            ax = axes[row, col]
-            bg_sl = get_slice(bg, axis, index)
-            seg_sl = get_slice(dseg, axis, index)
-            ax.imshow(
-                bg_sl,
-                cmap="gray",
-                vmin=lo,
-                vmax=hi,
-                aspect=slice_aspect(zooms, axis),
-                interpolation="nearest",
-            )
-            rgba = np.zeros(seg_sl.shape + (4,))
-            for label, color in colors.items():
-                # boundary voxels of this class
-                m = seg_sl == label
-                if not m.any():
-                    continue
-                interior = (
-                    m
-                    & np.roll(m, 1, 0)
-                    & np.roll(m, -1, 0)
-                    & np.roll(m, 1, 1)
-                    & np.roll(m, -1, 1)
-                )
-                boundary = m & ~interior
-                rgba[boundary] = color + (0.9,)
-            ax.imshow(
-                rgba,
-                aspect=slice_aspect(zooms, axis),
-                interpolation="nearest",
-            )
-            ax.axis("off")
-    fig.suptitle(f"{title}  (CSF=blue GM=orange WM=green)", color="white")
-    fig.tight_layout()
-    fig.savefig(out_png, dpi=120, facecolor="black")
-    plt.close(fig)
-
-
 def snapshot_norm(template_path, t1w_tpl_path, nm_tpl_path, out_png, title):
     tpl_img, tpl = load(template_path)
     _, t1w_tpl = load(t1w_tpl_path)
@@ -277,13 +226,6 @@ if mode == "coreg":
         snakemake.input.overlay,
         snakemake.output.png,
         f"{label}: NM average in T1w space (T1w edges)",
-    )
-elif mode == "seg":
-    snapshot_seg(
-        snakemake.input.bg,
-        snakemake.input.overlay,
-        snakemake.output.png,
-        f"{label}: tissue segmentation",
     )
 elif mode == "norm":
     snapshot_norm(

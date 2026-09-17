@@ -5,7 +5,7 @@ Snakebids/Snakemake BIDS app that preprocesses neuromelanin-sensitive MRI
 substantia nigra (SN) segmentation.
 
 It is a scriptable re-implementation of a manual SPM12 workflow
-(Realign → ImCalc average → Coregister → Segment → Normalise → Smooth),
+(Realign → ImCalc average → Coregister → Normalise → Smooth),
 using ANTs (via ANTsPy) instead of the SPM GUI:
 
 | Step | SPM (manual) | neuroPRO |
@@ -13,7 +13,6 @@ using ANTs (via ANTsPy) instead of the SPM GUI:
 | 1. Realign & reslice NM images | SPM Realign (register to mean) | two-pass rigid registration to the mean (Mattes MI, B-spline reslice) |
 | 2. Average | ImCalc `(i1+i2+i3)/3` | mean of all realigned NM magnitude images |
 | 3. Co-registration | SPM Coregister (NMI) | rigid NM avg → T1w (Mattes MI) |
-| 4. Segmentation | SPM unified segmentation | Atropos with template tissue priors (CSF/GM/WM) warped to native space |
 | 5. Normalise (write), 1 mm | deformation field `y_` | affine+SyN T1w → MNI152NLin2009cAsym, composed with the rigid from step 3, single-interpolation resample |
 | 6. Smooth, 1 mm FWHM | SPM Smooth | Gaussian smoothing |
 
@@ -70,7 +69,7 @@ layout matched, and any filter that had to be relaxed.
 A subject with NM images but no anatomical is **not** skipped. Realignment,
 averaging and motion QC need no T1w, so those run and produce
 `desc-avg_NM.nii.gz`, the motion TSV and a native-space QC snapshot. Only
-coregistration, segmentation and normalization are skipped. The group summary
+coregistration and normalization are skipped. The group summary
 lists these with a status of `nm-only`.
 
 ### Sessions
@@ -105,14 +104,12 @@ sub-XXX/anat/
   sub-XXX_desc-preproc_T1w.nii.gz           N4 bias-corrected T1w
   sub-XXX_desc-avg_NM.nii.gz                realigned + averaged NM (native)
   sub-XXX_space-T1w_desc-avg_NM.nii.gz      NM average coregistered to T1w
-  sub-XXX_label-{CSF,GM,WM}_probseg.nii.gz  tissue probabilities (native T1w)
-  sub-XXX_dseg.nii.gz                       1=CSF 2=GM 3=WM
   sub-XXX_desc-brain_mask.nii.gz
   sub-XXX_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
   sub-XXX_space-MNI152NLin2009cAsym_desc-avg_NM.nii.gz
   sub-XXX_space-MNI152NLin2009cAsym_desc-smoothed_NM.nii.gz   <- final image
 sub-XXX/xfm/    NM→T1w rigid (.mat), T1w↔MNI composite warps (.h5)
-sub-XXX/qc/     coreg / seg / norm snapshot PNGs, NM motion table,
+sub-XXX/qc/     coreg / norm snapshot PNGs, NM motion table,
                 desc-{coreg,norm}_metrics.json registration quality
 
 (paths gain a ses-YYY entity on sessioned datasets; a subject with no
@@ -159,8 +156,7 @@ every change.
 
 ## Template
 
-`tpl-MNI152NLin2009cAsym` (res-01 T1w, brain mask, CSF/GM/WM probsegs from
-TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
+`tpl-MNI152NLin2009cAsym` (res-01 T1w from TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
 template; for pediatric cohorts pass a pediatric template via
 `--template_dir`/`--template_name`.  Entities are matched by glob, so
 `res-1` as well as `res-01`, and the extra `cohort-` entity that

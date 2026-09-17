@@ -42,11 +42,6 @@ def template_file(suffix, **entities):
 
 
 template_t1w = template_file("T1w", res="01")
-template_mask = template_file("mask", res="01", desc="brain")
-template_probseg = {
-    tissue: template_file("probseg", res="01", label=tissue)
-    for tissue in ["CSF", "GM", "WM"]
-}
 
 
 # ---- dataset scan ----

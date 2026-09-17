@@ -52,16 +52,10 @@ rule all_participant:
         ),
         # NM average coregistered to the subject's T1w
         for_each_entry(datatype="anat", space="T1w", desc="avg", suffix="NM.nii.gz"),
-        # tissue segmentations
-        [
-            for_each_entry(datatype="anat", label=tissue, suffix="probseg.nii.gz")
-            for tissue in ["CSF", "GM", "WM"]
-        ],
-        for_each_entry(datatype="anat", suffix="dseg.nii.gz"),
         # QC snapshots
         [
             for_each_entry(datatype="qc", desc=qc, suffix="qc.png")
-            for qc in ["coreg", "seg", "norm"]
+            for qc in ["coreg", "norm"]
         ],
         # ---- entries without a T1w: as far as the data allows ----
         # realigned + averaged NM in native space, with motion QC
