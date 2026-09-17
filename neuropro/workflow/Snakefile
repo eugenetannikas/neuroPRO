@@ -54,6 +54,8 @@ rule all_participant:
         for_each_entry(datatype="anat", desc="denoised", suffix="NM.nii.gz"),
         # NM average coregistered to the subject's T1w
         for_each_entry(datatype="anat", space="T1w", desc="avg", suffix="NM.nii.gz"),
+        # brain mask in native T1w space
+        for_each_entry(datatype="anat", desc="brain", suffix="mask.nii.gz"),
         # QC snapshots
         [
             for_each_entry(datatype="qc", desc=qc, suffix="qc.png")

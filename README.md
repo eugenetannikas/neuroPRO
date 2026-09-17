@@ -108,6 +108,7 @@ sub-XXX/anat/
   sub-XXX_desc-avg_NM.nii.gz                realigned + averaged NM (native, raw)
   sub-XXX_desc-denoised_NM.nii.gz           NLM-denoised average (native)  <- compare scans on this
   sub-XXX_space-T1w_desc-avg_NM.nii.gz      NM average coregistered to T1w
+  sub-XXX_desc-brain_mask.nii.gz            brain mask (template mask, inverse-warped)
   sub-XXX_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
   sub-XXX_space-MNI152NLin2009cAsym_desc-denoised_NM.nii.gz   <- template-space image
 sub-XXX/xfm/    NM→T1w rigid (.mat), T1w↔MNI composite warps (.h5)
@@ -162,7 +163,7 @@ every change.
 
 ## Template
 
-`tpl-MNI152NLin2009cAsym` (res-01 T1w from TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
+`tpl-MNI152NLin2009cAsym` (res-01 T1w and brain mask from TemplateFlow) is bundled in `neuropro/resources/`.  Note this is an adult
 template; for pediatric cohorts pass a pediatric template via
 `--template_dir`/`--template_name`.  Entities are matched by glob, so
 `res-1` as well as `res-01`, and the extra `cohort-` entity that
