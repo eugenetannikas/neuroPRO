@@ -43,6 +43,6 @@ features = ["runtime"]
 [tool.pixi.environments.dev]
 features = ["runtime", "dev"]
 
-[tool.pixi.tasks]
+[tool.pixi.feature.dev.tasks]
 quality_fix = "black neuropro && snakefmt neuropro"
-test = { cmd = "pytest", environment = "dev" }
+test = "pytest"
