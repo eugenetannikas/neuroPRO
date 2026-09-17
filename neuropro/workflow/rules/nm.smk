@@ -1,9 +1,11 @@
 """
 NM-MRI (neuromelanin-sensitive GRE) processing:
 
-- rigid realignment of all magnitude echo images to their mean (two-pass,
-  the scriptable equivalent of SPM Realign: estimate & reslice, register to
-  mean) followed by averaging (SPM ImCalc (i1+i2+..+iN)/N)
+- echoes of one acquisition are combined without registration (they share
+  an excitation and are already in register); separate runs are then
+  rigidly realigned to their mean (two-pass, the scriptable equivalent of
+  SPM Realign: estimate & reslice, register to mean) and averaged (SPM
+  ImCalc (i1+i2+..+iN)/N)
 - non-local-means denoising of the average in native space (in place of
   SPM Smooth; edge-preserving, and applied before any resampling)
 - rigid coregistration of the NM average to the subject's T1w
@@ -12,9 +14,11 @@ NM-MRI (neuromelanin-sensitive GRE) processing:
 
 
 rule realign_average_nm:
-    """Two-pass rigid realignment to the mean, then average all NM images."""
+    """Combine echoes within each run, realign runs to their mean, average."""
     input:
         nm=get_nm_files,
+    params:
+        runs=get_nm_runs,
     output:
         avg=bids(
             root=root,

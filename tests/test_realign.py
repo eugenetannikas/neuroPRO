@@ -41,7 +41,10 @@ def write(path, data):
     return str(path)
 
 
-def run_script(tmp_path, inputs):
+def run_script(tmp_path, inputs, runs=None):
+    """runs: the echo grouping the rule would pass; default = one run per file."""
+    if runs is None:
+        runs = [[p] for p in inputs]
     out = SimpleNamespace(
         avg=str(tmp_path / "avg.nii.gz"),
         json=str(tmp_path / "avg.json"),
@@ -49,6 +52,7 @@ def run_script(tmp_path, inputs):
     )
     fake = SimpleNamespace(
         input=SimpleNamespace(nm=inputs),
+        params=SimpleNamespace(runs=runs),
         output=out,
         threads=1,
         config={"nm_variant": "corrected", "nm_echoes": [1, 2, 3]},
@@ -101,3 +105,38 @@ def test_single_image_passes_through(tmp_path):
     out = run_script(tmp_path, inputs)
     assert Path(out.avg).exists()
     assert len(motion_rows(out.motion)) == 1
+    # untouched: no registration, no reslicing
+    assert np.allclose(np.asanyarray(nib.load(out.avg).dataobj), blob())
+
+
+@pytest.mark.slow
+def test_echoes_of_one_run_are_averaged_not_realigned(tmp_path):
+    """Echoes share an excitation: combine by mean, never register them."""
+    e1 = blob(seed=1)
+    e2 = blob(seed=2) * 0.7          # later echo: same anatomy, less signal
+    inputs = [write(tmp_path / "s5_e1.nii.gz", e1), write(tmp_path / "s5_e2.nii.gz", e2)]
+    out = run_script(tmp_path, inputs, runs=[inputs])   # one run, two echoes
+
+    averaged = np.asanyarray(nib.load(out.avg).dataobj)
+    assert np.allclose(averaged, (e1 + e2) / 2, atol=1e-5)   # exact voxelwise mean
+    assert len(motion_rows(out.motion)) == 1                # one run, one row
+    assert "\t0.0000\t0.0000" in motion_rows(out.motion)[0]  # nothing moved
+
+
+@pytest.mark.slow
+def test_runs_are_realigned_but_their_echoes_are_not(tmp_path):
+    """Three runs x two echoes: three motion rows, not six."""
+    inputs, runs = [], []
+    for r in range(3):
+        paths = [
+            write(tmp_path / f"s{r}_e{e}.nii.gz", blob(shift=r, seed=10 * r + e))
+            for e in (1, 2)
+        ]
+        inputs += paths
+        runs.append(paths)
+    out = run_script(tmp_path, inputs, runs=runs)
+    assert len(motion_rows(out.motion)) == 3
+    import json
+    meta = json.loads(Path(out.json).read_text())
+    assert meta["EchoesPerRun"] == [2, 2, 2]
+    assert meta["RunsRealigned"] == 3

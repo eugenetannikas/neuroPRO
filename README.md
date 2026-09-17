@@ -11,8 +11,8 @@ using ANTs (via ANTsPy) instead of the SPM GUI:
 
 | Step | SPM (manual) | neuroPRO |
 |---|---|---|
-| 1. Realign & reslice NM images | SPM Realign (register to mean) | two-pass rigid registration to the mean (Mattes MI, B-spline reslice) |
-| 2. Average | ImCalc `(i1+i2+i3)/3` | mean of all realigned NM magnitude images |
+| 1. Realign & reslice NM images | SPM Realign (register to mean) | echoes of one run are combined by a plain mean (they share an excitation, so they are never registered to each other); separate runs are then two-pass rigidly registered to their mean (Mattes MI, B-spline reslice). A single run passes through untouched. |
+| 2. Average | ImCalc `(i1+i2+i3)/3` | mean of the realigned runs |
 | 3. Denoise | SPM Smooth (1 mm Gaussian, after normalise) | non-local means (ANTs DenoiseImage, Rician) on the native-space average, before any resampling |
 | 4. Co-registration | SPM Coregister (NMI) | rigid NM avg → T1w (Mattes MI) |
 | 5. Normalise (write), 1 mm | deformation field `y_` | affine+SyN T1w → MNI152NLin2009cAsym, composed with the rigid from step 4, single-interpolation resample of the denoised average |
@@ -56,7 +56,9 @@ Discovery is driven by the *images*, not by their sidecars, so:
 
 Siemens exports each acquisition twice — distortion corrected
 (SeriesDescription `NM-GRE`) and uncorrected (`NM-GRE_ND`); `--nm_variant`
-picks between them and `--nm_echoes` subsets echoes. **Filters only ever
+picks between them and `--nm_echoes` subsets echoes (default: echo 1 only —
+the shortest TE carries the most signal and the least T2\*-eroded NM contrast;
+later echoes add noise about as fast as signal). **Filters only ever
 subset what is present.** If the requested variant or echoes do not exist in
 a dataset, the filter is relaxed and the reason reported, rather than
 silently leaving the subject with nothing — an empty result is nearly always

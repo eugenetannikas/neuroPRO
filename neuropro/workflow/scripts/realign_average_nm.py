@@ -1,14 +1,17 @@
-"""Two-pass rigid realignment of all NM magnitude images to their mean,
-followed by averaging.
+"""Combine echoes within each run, realign the runs, and average.
 
-Pass 1 registers every image to the first image and forms a mean; pass 2
-registers every original image to that mean and averages again (the
-scriptable equivalent of SPM Realign 'register to mean' + ImCalc average).
-Registration uses rigid transforms with a Mattes mutual-information metric,
-so echoes with different contrast can be aligned to each other.  Images are
-resliced with B-spline interpolation.
+An NM acquisition is read out at several echo times from one excitation, so
+its echoes are already in register: they are combined by a plain mean, never
+registered to each other (registering an image to a differently-weighted copy
+of itself is at best pointless).  Separate runs -- repeated acquisitions --
+do move relative to each other, so those are rigidly realigned: pass 1
+registers every run to the first and forms a mean, pass 2 registers every
+original run to that mean and averages again (the scriptable equivalent of
+SPM Realign 'register to mean' + ImCalc average).  Registration uses rigid
+transforms with a Mattes mutual-information metric; runs are resliced with
+B-spline interpolation.
 
-If only one image is present, it is simply resampled/copied through.
+A single run passes straight through: no registration, no reslicing.
 """
 
 import json
@@ -41,12 +44,53 @@ def load_volumes(path):
     ]
 
 
+def combine_echoes(label, paths):
+    """The runs represented by one group of echo images.
+
+    Normally a group is the echoes of one 3D acquisition and yields one run:
+    their voxelwise mean, no registration.  A 4D file holds repeats along its
+    fourth axis, so a group of 4D echoes yields one run per repeat, combining
+    echo i of every repeat.
+    """
+    per_path = [load_volumes(p) for p in paths]
+    n_rep = {len(v) for v in per_path}
+    if len(n_rep) != 1:
+        raise ValueError(
+            f"run {label}: echo files hold different numbers of volumes "
+            f"({sorted(n_rep)}); cannot pair them"
+        )
+    runs = []
+    for rep in range(n_rep.pop()):
+        vols = [v[rep][1] for v in per_path]
+        shapes = {tuple(v.shape) for v in vols}
+        if len(shapes) != 1:
+            raise ValueError(
+                f"run {label}: echoes have different grids {sorted(shapes)}; "
+                "echoes of one acquisition must share a grid"
+            )
+        if len(vols) == 1:
+            combined = vols[0]
+        else:
+            mean = np.zeros(vols[0].shape, dtype=np.float64)
+            for v in vols:
+                mean += v.numpy()
+            mean /= len(vols)
+            combined = vols[0].new_image_like(mean.astype(np.float32))
+        suffix = f"[{rep}]" if len(per_path[0]) > 1 else ""
+        runs.append((f"{label}{suffix}", combined, len(vols)))
+    return runs
+
+
+run_groups = [list(g) for g in snakemake.params.runs]
 nm_paths = []
 images = []
-for _path in list(snakemake.input.nm):
-    for _label, _image in load_volumes(_path):
-        nm_paths.append(_label)
+echoes_per_run = []
+for _i, _paths in enumerate(run_groups):
+    _label = os.path.basename(_paths[0]) if len(_paths) == 1 else f"run-{_i + 1}"
+    for _rlabel, _image, _n_echo in combine_echoes(_label, _paths):
+        nm_paths.append(_rlabel)
         images.append(_image)
+        echoes_per_run.append(_n_echo)
 
 
 def register_all(target, images, paths):
@@ -93,13 +137,14 @@ def average(images):
 
 
 if len(images) == 1:
+    # one run: nothing to realign, and no reslicing to blur it
     avg = images[0]
     motion = [(nm_paths[0], 0.0, 0.0)]
 else:
-    # pass 1: register everything to the first image
+    # pass 1: register every run to the first and form a mean
     resliced, _ = register_all(images[0], images, nm_paths)
     mean1 = average(resliced)
-    # pass 2: register the original images to the pass-1 mean
+    # pass 2: register the original runs to the pass-1 mean
     resliced, motion = register_all(mean1, images, nm_paths)
     avg = average(resliced)
 
@@ -113,9 +158,15 @@ ants.image_write(avg, snakemake.output.avg)
 with open(snakemake.output.json, "w") as f:
     json.dump(
         {
-            "Description": "Average of rigidly realigned NM-GRE magnitude images",
+            "Description": (
+                "NM-GRE magnitude image: echoes of each run combined by "
+                "plain mean, runs rigidly realigned and averaged"
+            ),
             "SourceFiles": list(snakemake.input.nm),
-            "VolumesRealigned": len(images),
+            "Runs": [list(g) for g in run_groups],
+            "RunsRealigned": len(images),
+            "EchoesPerRun": echoes_per_run,
+            "EchoCombination": "voxelwise mean, no registration",
             "NMVariant": snakemake.config["nm_variant"],
             "Echoes": snakemake.config["nm_echoes"],
             "RealignmentPasses": 1 if len(images) == 1 else 2,
@@ -125,6 +176,6 @@ with open(snakemake.output.json, "w") as f:
     )
 
 with open(snakemake.output.motion, "w") as f:
-    f.write("source_file\ttranslation_mm\trotation_deg\n")
+    f.write("run\ttranslation_mm\trotation_deg\n")
     for path, trans_mm, rot_deg in motion:
         f.write(f"{os.path.basename(path)}\t{trans_mm:.4f}\t{rot_deg:.4f}\n")

@@ -30,11 +30,15 @@ parse_args:
       - uncorrected
 
   --nm_echoes:
-    help: "Echo numbers to include in NM realignment and averaging
+    help: "Echo numbers to use for the NM image. Echoes of one acquisition are
+      combined by plain averaging, never realigned to each other. The default
+      is the first echo alone: it has the shortest TE, so the most signal and
+      the least T2*-eroded neuromelanin contrast; later echoes add noise about
+      as fast as signal. Pass e.g. '1 2 3' for an unregistered echo average.
       (default: %(default)s)"
     type: int
     nargs: '+'
-    default: [1, 2, 3]
+    default: [1]
 
   --nm_layout:
     help: "Naming convention of the NM-GRE images. 'auto' tries each in turn

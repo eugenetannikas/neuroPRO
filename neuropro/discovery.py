@@ -177,6 +177,21 @@ class NMImage:
             self.path,
         )
 
+    @property
+    def run_key(self) -> str:
+        """Identifies the acquisition (run) this image belongs to.
+
+        The echoes of one acquisition come from the same excitation and are
+        already in register; only separate runs need realigning.  The series
+        number is that identity when we have it.  Without one, fall back to
+        the filename with its echo marker removed, so 'x_echo-1' and
+        'x_echo-2' still land in the same run.
+        """
+        if self.series is not None:
+            return f"series-{self.series}"
+        stem = strip_nifti_ext(Path(self.path).name)
+        return re.sub(r"_(?:e|echo-)\d+", "", stem)
+
 
 @dataclass(frozen=True)
 class T1wImage:
@@ -430,6 +445,18 @@ def filter_nm(
             )
 
     return images, notes
+
+
+def group_by_run(images: list[NMImage]) -> list[list[str]]:
+    """Paths grouped into runs, in discovery order.
+
+    Each inner list holds the images of one acquisition -- its echoes -- which
+    are combined without registration; the outer list is what gets realigned.
+    """
+    groups: dict[str, list[str]] = {}
+    for img in images:
+        groups.setdefault(img.run_key, []).append(img.path)
+    return list(groups.values())
 
 
 # --------------------------------------------------------------------------
